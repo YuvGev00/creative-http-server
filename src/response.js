@@ -233,6 +233,101 @@ class Response {
     });
     return this;
   }
+
+  // ---- CREATIVE: HTTP/1.1 chunked transfer encoding ----
+  //
+  // Open a response with `Transfer-Encoding: chunked` and no Content-Length.
+  // Returns a small writer: .write(data) emits one chunk (size in hex CRLF
+  // data CRLF), .end() writes the terminating zero-length chunk. The browser
+  // renders each chunk the instant it arrives, so a page can visibly
+  // assemble itself.
+  chunked(contentType = 'text/html; charset=utf-8') {
+    if (this.sent) return null;
+    this._markSent();
+    this.headers['Content-Type'] = contentType;
+    this.headers['Transfer-Encoding'] = 'chunked';
+    // Build the head WITHOUT a Content-Length (null) and strip the default
+    // 'Connection: close' so the framing — not EOF — delimits the body.
+    const head = this._writeHead(null);
+    this.socket.write(head);
+
+    const sock = this.socket;
+    let ended = false;
+    return {
+      write: (data) => {
+        if (ended) return;
+        const buf = Buffer.isBuffer(data)
+          ? data
+          : Buffer.from(String(data), 'utf8');
+        if (buf.length === 0) return;
+        this._bytesWritten += buf.length;
+        sock.write(buf.length.toString(16) + '\r\n');
+        sock.write(buf);
+        sock.write('\r\n');
+      },
+      end: (data) => {
+        if (ended) return;
+        if (data) {
+          const buf = Buffer.isBuffer(data)
+            ? data
+            : Buffer.from(String(data), 'utf8');
+          if (buf.length) {
+            sock.write(buf.length.toString(16) + '\r\n');
+            sock.write(buf);
+            sock.write('\r\n');
+          }
+        }
+        ended = true;
+        sock.write('0\r\n\r\n'); // terminating chunk
+        sock.end();
+      },
+    };
+  }
+
+  // ---- CREATIVE: Server-Sent Events (text/event-stream) ----
+  //
+  // A long-lived response that pushes named events to the browser's
+  // EventSource. Different real-time mechanism from WebSockets: one-way,
+  // plain HTTP, auto-reconnecting in the browser.
+  sse() {
+    if (this.sent) return null;
+    this._markSent();
+    this.headers['Content-Type'] = 'text/event-stream; charset=utf-8';
+    this.headers['Cache-Control'] = 'no-cache';
+    this.headers['Connection'] = 'keep-alive';
+    const head = this._writeHead(null);
+    this.socket.write(head);
+
+    const sock = this.socket;
+    let closed = false;
+    sock.on('close', () => {
+      closed = true;
+    });
+    return {
+      send: (data, event) => {
+        if (closed) return;
+        let frame = '';
+        if (event) frame += `event: ${event}\n`;
+        const payload =
+          typeof data === 'string' ? data : JSON.stringify(data);
+        // Each line of the payload needs its own "data:" prefix.
+        for (const line of String(payload).split('\n')) {
+          frame += `data: ${line}\n`;
+        }
+        frame += '\n';
+        this._bytesWritten += Buffer.byteLength(frame);
+        sock.write(frame);
+      },
+      close: () => {
+        if (closed) return;
+        closed = true;
+        sock.end();
+      },
+      get closed() {
+        return closed;
+      },
+    };
+  }
 }
 
 module.exports = { Response, STATUS_TEXT };

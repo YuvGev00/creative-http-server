@@ -14,16 +14,17 @@ node examples/demo.js      # or: npm start
 # → http://localhost:3000
 # → http://localhost:3000/_routes   (live API reference)
 
-node test/smoke.js         # or: npm test  (26 assertions, raw-socket driven)
+node test/smoke.js         # or: npm test  (28 assertions, raw-socket driven)
 ```
 
 ## API design choices
 
 I chose an **Express-flavoured, chainable core** so the framework is instantly
-familiar and easy to evaluate against the requirements, then added **three
+familiar and easy to evaluate against the requirements, then added **four
 cohesive creative features** that build naturally on top of it: typed routes
-with auto-validation + live docs, a request Flight Recorder, and hand-rolled
-WebSockets — all on the same raw `net` sockets.
+with auto-validation + live docs, a request Flight Recorder, hand-rolled
+WebSockets, and a Streaming Lab (chunked transfer + Server-Sent Events) —
+all on the same raw `net` sockets.
 
 ### Core API
 
@@ -121,6 +122,24 @@ app.ws('/chat', (conn) => {
 });
 ```
 
+### Creative feature 4 — Streaming Lab: chunked transfer + Server-Sent Events
+
+Two more real-time HTTP mechanisms, hand-built on the same raw sockets and
+shown side by side at `/streaming-lab.html`:
+
+- **`res.chunked()`** opens a response with `Transfer-Encoding: chunked` and
+  no `Content-Length`, then writes each frame by hand
+  (`<hex size>\r\n<data>\r\n`, terminated by the `0\r\n\r\n` chunk). The demo
+  page **visibly assembles itself** as chunks arrive — open DevTools › Network
+  to watch the handcrafted framing.
+- **`res.sse()`** holds a `text/event-stream` connection open and pushes named
+  events the browser's native `EventSource` consumes — one-way real-time over
+  plain HTTP, distinct from the WebSocket path.
+
+Together with the WebSocket support this covers the **full spectrum of HTTP
+real-time delivery** (full-duplex WS, one-way SSE, progressive chunked) — all
+implemented from the wire format up.
+
 ## How it works under the hood
 
 1. **TCP, not HTTP.** `net.createServer` gives raw sockets. A single `'data'`
@@ -144,7 +163,8 @@ app.ws('/chat', (conn) => {
 src/server.js       App API, net server, per-socket request buffering
 src/http-parser.js  Buffer-safe, Content-Length-aware request extraction
 src/request.js      Request wrapper (lazy body parsing)
-src/response.js     Chainable response (json/send/sendFile/redirect)
+src/response.js     Chainable response (json/send/sendFile/redirect;
+                    chunked + SSE streaming — creative 4)
 src/router.js       :param/wildcard routing + middleware chain
 src/static.js       Static serving + traversal guard
 src/mime.js         Extension → MIME map
@@ -154,20 +174,21 @@ src/recorder.js     Request Flight Recorder ring buffer (creative 2)
 src/trace-view.js   Live /_trace timeline renderer   (creative 2)
 src/websocket.js    RFC 6455 handshake + frame codec (creative 3)
 examples/demo.js    Wires every feature together (incl. /chat WebSocket)
-test/smoke.js       26 raw-socket assertions, exits non-zero on failure
+test/smoke.js       28 raw-socket assertions, exits non-zero on failure
 ```
 
 ## Verification
 
 `npm test` boots the framework on an ephemeral port and drives it with a raw
-`net` client (26 assertions), covering: JSON routes, path params,
+`net` client (28 assertions), covering: JSON routes, path params,
 valid/invalid typed-route validation, static MIME, traversal blocking, the
 live docs (HTML + JSON), a split-across-TCP-chunks request, 404 handling,
 hardening cases — malformed/conflicting `Content-Length`, rejected chunked
 encoding, wildcard routes, `HEAD` no-body, CRLF header-injection, `send()`
 with an object, double-`next()`, NUL-byte paths, oversized-body `413` — plus
-the creative features: the Flight Recorder timeline, and a full WebSocket
-handshake + masked-frame round-trip checked against the RFC 6455 test vector.
+the creative features: the Flight Recorder timeline, a full WebSocket
+handshake + masked-frame round-trip checked against the RFC 6455 test vector,
+and byte-level checks of the chunked-transfer and SSE framing.
 
 ## Possible extensions (out of scope here)
 

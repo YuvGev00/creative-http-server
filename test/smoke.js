@@ -151,6 +151,18 @@ async function main() {
   app.ws('/ws-echo', (conn) => {
     conn.on('message', (m) => conn.send('echo:' + m));
   });
+  app.get('/t-chunked', (req, res) => {
+    const s = res.chunked('text/plain');
+    s.write('AAA');
+    s.write('BBB');
+    s.end('CCC');
+  });
+  app.get('/t-sse', (req, res) => {
+    const ch = res.sse();
+    ch.send({ n: 1 }, 'tick');
+    ch.send({ n: 2 }, 'tick');
+    setTimeout(() => ch.close(), 60);
+  });
   let mwRuns = 0;
   app.use('/double', (req, res, next) => {
     next();
@@ -377,6 +389,57 @@ async function main() {
       's3pPLMBiTxaQ9kYGzzhZRbK+xOo=',
     'accept key mismatch'
   );
+
+  // --- Creative feature: Streaming Lab ---
+
+  // 26. Chunked transfer: header present, framing correct, body reassembles.
+  {
+    const raw = await new Promise((resolve, reject) => {
+      const s = net.connect(port, '127.0.0.1');
+      let d = Buffer.alloc(0);
+      s.on('connect', () =>
+        s.write('GET /t-chunked HTTP/1.1\r\nHost: x\r\n\r\n')
+      );
+      s.on('data', (x) => (d = Buffer.concat([d, x])));
+      s.on('end', () => resolve(d.toString('latin1')));
+      s.on('error', reject);
+      setTimeout(() => resolve(d.toString('latin1')), 1500);
+    });
+    const head = raw.slice(0, raw.indexOf('\r\n\r\n')).toLowerCase();
+    const bodyOk =
+      raw.includes('3\r\nAAA\r\n') &&
+      raw.includes('3\r\nCCC\r\n') &&
+      raw.trimEnd().endsWith('0');
+    ok(
+      'chunked: Transfer-Encoding header + valid framing',
+      head.includes('transfer-encoding: chunked') &&
+        !head.includes('content-length') &&
+        bodyOk,
+      'framing mismatch'
+    );
+  }
+
+  // 27. SSE: correct content-type and event/data framing.
+  {
+    const raw = await new Promise((resolve, reject) => {
+      const s = net.connect(port, '127.0.0.1');
+      let d = '';
+      s.on('connect', () => s.write('GET /t-sse HTTP/1.1\r\nHost: x\r\n\r\n'));
+      s.on('data', (x) => (d += x));
+      s.on('end', () => resolve(d));
+      s.on('error', reject);
+      setTimeout(() => resolve(d), 1500);
+    });
+    const head = raw.slice(0, raw.indexOf('\r\n\r\n')).toLowerCase();
+    ok(
+      'SSE: text/event-stream + event/data frames',
+      head.includes('text/event-stream') &&
+        raw.includes('event: tick') &&
+        raw.includes('data: {"n":1}') &&
+        raw.includes('data: {"n":2}'),
+      'SSE framing mismatch'
+    );
+  }
 
   server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
