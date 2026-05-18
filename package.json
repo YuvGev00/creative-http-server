@@ -1,0 +1,14 @@
+{
+  "name": "forge-http",
+  "version": "1.0.0",
+  "description": "A creative HTTP/1.1 server framework built from scratch on Node's net module",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node examples/demo.js",
+    "demo": "node examples/demo.js",
+    "test": "node test/smoke.js"
+  },
+  "author": "Yuval Gev",
+  "license": "MIT"
+}
