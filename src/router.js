@@ -82,13 +82,24 @@ class Router {
     const chainDone = new Promise((resolve, reject) => {
       let idx = 0;
 
-      const runNext = async () => {
+      const runStep = async () => {
         try {
           if (res.sent) return resolve();
 
           if (idx < chain.length) {
             const mw = chain[idx++];
-            await mw.fn(req, res, runNext);
+
+            // Guard: next() may be called at most once per layer. A second
+            // call is ignored, preventing the downstream chain/route from
+            // running twice.
+            let advanced = false;
+            const next = () => {
+              if (advanced) return;
+              advanced = true;
+              runStep();
+            };
+
+            await mw.fn(req, res, next);
             return;
           }
 
@@ -108,7 +119,7 @@ class Router {
         }
       };
 
-      runNext();
+      runStep();
     });
 
     // Settle as soon as a response is flushed (covers middleware that

@@ -13,7 +13,7 @@ const HEADER_TERMINATOR = Buffer.from('\r\n\r\n');
 //   { complete: false }                          -> need more bytes, wait
 //   { complete: true, request, bytesConsumed }   -> a full request was parsed
 //   { error: 'message' }                         -> malformed beyond recovery
-function extractRequest(buffer) {
+function extractRequest(buffer, maxBody = Infinity) {
   const headerEnd = buffer.indexOf(HEADER_TERMINATOR);
   if (headerEnd === -1) {
     // Headers not fully received yet.
@@ -67,6 +67,12 @@ function extractRequest(buffer) {
     if (!Number.isSafeInteger(contentLength)) {
       return { error: 'Invalid Content-Length' };
     }
+  }
+
+  // Reject an over-large declared body immediately — before buffering it —
+  // so a client can't pin memory by announcing a huge Content-Length.
+  if (contentLength > maxBody) {
+    return { error: 'Payload Too Large', tooLarge: true };
   }
 
   // Wait until the full declared body has arrived.

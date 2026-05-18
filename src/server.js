@@ -10,6 +10,7 @@ const docs = require('./docs');
 const serveStatic = require('./static');
 
 const MAX_REQUEST_BYTES = 5 * 1024 * 1024; // guard against unbounded buffering
+const SOCKET_TIMEOUT_MS = 30 * 1000; // reap idle / wedged connections
 
 // The application object. Chainable, Express-flavoured API plus the creative
 // typed-route layer (app.route) and auto docs at /_routes.
@@ -96,6 +97,21 @@ class App {
       let buffer = Buffer.alloc(0);
       let closed = false;
 
+      // Idle/slow-client guard. Covers slow-loris (trickled headers), a
+      // client that declares a body it never sends, and a handler/middleware
+      // that never responds — any wedged connection is reaped instead of
+      // leaking a socket forever.
+      socket.setTimeout(SOCKET_TIMEOUT_MS);
+      socket.on('timeout', () => {
+        if (!closed) {
+          closed = true;
+          socket.end(
+            'HTTP/1.1 408 Request Timeout\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+          );
+          socket.destroy();
+        }
+      });
+
       socket.on('error', () => {
         closed = true;
       });
@@ -115,11 +131,14 @@ class App {
         // Drain every complete request currently buffered. TCP may deliver
         // a partial request, a whole one, or several at once.
         while (!closed) {
-          const result = extractRequest(buffer);
+          const result = extractRequest(buffer, MAX_REQUEST_BYTES);
 
           if (result.error) {
+            const status = result.tooLarge
+              ? '413 Payload Too Large'
+              : '400 Bad Request';
             socket.end(
-              `HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`
+              `HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`
             );
             closed = true;
             return;

@@ -94,6 +94,16 @@ async function main() {
   app.get('/files/*', (req, res) =>
     res.json({ wildcard: req.params.wildcard })
   );
+  app.get('/send-object', (req, res) => res.send({ via: 'send' }));
+  let mwRuns = 0;
+  app.use('/double', (req, res, next) => {
+    next();
+    next(); // second call must be ignored
+  });
+  app.get('/double', (req, res) => {
+    mwRuns++;
+    res.json({ runs: mwRuns });
+  });
   app.static(path.join(__dirname, '..', 'examples', 'public'));
 
   const server = app.listen(0);
@@ -205,6 +215,35 @@ async function main() {
     !r.headers['x-injected'] && r.status === 500,
     `injected header present? ${!!r.headers['x-injected']}`
   );
+
+  // --- Regression tests for the second (skeptical) review ---
+
+  // 16. res.send() with an object must not hang — it should return JSON.
+  r = await rawRequest(port, [get('/send-object')]);
+  ok(
+    'res.send(object) -> 200 JSON (no hang)',
+    r.status === 200 && JSON.parse(r.body).via === 'send',
+    `got ${r.status} ${r.body}`
+  );
+
+  // 17. Calling next() twice must run the route exactly once.
+  r = await rawRequest(port, [get('/double')]);
+  ok(
+    'double next() runs route once',
+    r.status === 200 && JSON.parse(r.body).runs === 1,
+    `runs=${r.body}`
+  );
+
+  // 18. %00 null byte in a static path -> 400, not 500.
+  r = await rawRequest(port, [get('/%00.txt')]);
+  ok('null byte in path -> 400', r.status === 400, `got ${r.status}`);
+
+  // 19. Oversized declared Content-Length rejected before buffering -> 413.
+  const huge =
+    'POST /api/users HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n' +
+    'Content-Length: 999999999\r\nConnection: close\r\n\r\n';
+  r = await rawRequest(port, [huge]);
+  ok('oversized Content-Length -> 413', r.status === 413, `got ${r.status}`);
 
   server.close();
   console.log(`\n${passed} passed, ${failed} failed`);

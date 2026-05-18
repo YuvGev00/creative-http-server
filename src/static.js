@@ -29,6 +29,12 @@ function serveStatic(rootDir, options = {}) {
       return res.status(400).send('Bad Request');
     }
 
+    // A NUL byte truncates paths at the syscall level on some platforms and
+    // makes fs.stat throw — reject it as a bad request rather than 500.
+    if (decoded.includes('\0')) {
+      return res.status(400).json({ error: 'Bad Request', reason: 'null byte in path' });
+    }
+
     const target = path.resolve(root, '.' + path.posix.normalize(decoded));
     if (target !== root && !target.startsWith(root + path.sep)) {
       return res.status(403).json({ error: 'Forbidden', reason: 'path traversal blocked' });

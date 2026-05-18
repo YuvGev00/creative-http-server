@@ -106,6 +106,18 @@ class Response {
   // Send a Buffer or string body and close the connection.
   send(body) {
     if (this.sent) return this;
+
+    // Delegate objects to json() BEFORE marking sent — otherwise json()
+    // would see sent===true, bail, and the connection would hang forever.
+    if (
+      body !== null &&
+      body !== undefined &&
+      typeof body === 'object' &&
+      !Buffer.isBuffer(body)
+    ) {
+      return this.json(body);
+    }
+
     this._markSent();
 
     let bodyBuf;
@@ -116,8 +128,6 @@ class Response {
       }
     } else if (body === undefined || body === null) {
       bodyBuf = Buffer.alloc(0);
-    } else if (typeof body === 'object') {
-      return this.json(body);
     } else {
       bodyBuf = Buffer.from(String(body), 'utf8');
       if (this.headers['Content-Type'] === undefined) {
@@ -176,8 +186,17 @@ class Response {
         return;
       }
       const stream = fs.createReadStream(filePath);
-      stream.pipe(this.socket);
+      const cleanup = () => stream.destroy();
+      // If the client disconnects mid-transfer, tear the read stream down
+      // so the file descriptor isn't leaked.
+      this.socket.once('close', cleanup);
+      this.socket.once('error', cleanup);
       stream.on('error', () => this.socket.destroy());
+      stream.on('end', () => {
+        this.socket.removeListener('close', cleanup);
+        this.socket.removeListener('error', cleanup);
+      });
+      stream.pipe(this.socket);
     });
     return this;
   }
