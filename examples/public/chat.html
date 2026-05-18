@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forge — WebSocket Chat</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    main { max-width: 560px; }
+    #log { text-align: left; background: #161b22; border: 1px solid #21262d;
+      border-radius: 10px; padding: 1rem; height: 280px; overflow-y: auto;
+      font-family: ui-monospace, Menlo, monospace; font-size: .85rem; }
+    #log div { margin: .2rem 0; }
+    .sys { color: #8b949e; font-style: italic; }
+    form { display: flex; gap: .5rem; margin-top: 1rem; }
+    input { flex: 1; padding: .6rem .8rem; border-radius: 8px;
+      border: 1px solid #21262d; background: #0d1117; color: #e6edf3; }
+    button { padding: .6rem 1.1rem; border: 0; border-radius: 8px;
+      background: #4c9aff; color: #04122b; font-weight: 600; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>WebSocket Chat</h1>
+    <p>Served over a <strong>hand-rolled WebSocket</strong> implemented on raw
+       <code>net</code> sockets — no <code>ws</code> library, no <code>http</code>.
+       Open this page in two tabs.</p>
+    <div id="log"></div>
+    <form id="f">
+      <input id="m" autocomplete="off" placeholder="Type a message…" />
+      <button>Send</button>
+    </form>
+  </main>
+  <script>
+    const log = document.getElementById('log');
+    const add = (text, cls) => {
+      const d = document.createElement('div');
+      if (cls) d.className = cls;
+      d.textContent = text;
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+    };
+    const ws = new WebSocket(`ws://${location.host}/chat`);
+    ws.onopen = () => add('● connected', 'sys');
+    ws.onclose = () => add('● disconnected', 'sys');
+    ws.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (d.system) add(d.system, 'sys');
+      else add(d.msg);
+    };
+    document.getElementById('f').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const i = document.getElementById('m');
+      if (i.value && ws.readyState === 1) { ws.send(i.value); i.value = ''; }
+    });
+  </script>
+</body>
+</html>

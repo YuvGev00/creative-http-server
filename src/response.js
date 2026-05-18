@@ -36,6 +36,7 @@ class Response {
     this.statusCode = 200;
     this.headers = {};
     this.sent = false;
+    this._bytesWritten = 0; // body bytes, for the Flight Recorder
     // Resolves the moment a response is flushed. dispatch() awaits this so a
     // middleware that responds without calling next() (e.g. static file
     // serving) still settles the request cleanly.
@@ -165,7 +166,10 @@ class Response {
     const bodyless = BODYLESS_STATUS.has(this.statusCode);
     const head = this._writeHead(bodyless ? null : bodyBuf.length);
     this.socket.write(head);
-    if (!this._bodySuppressed() && bodyBuf.length) this.socket.write(bodyBuf);
+    if (!this._bodySuppressed() && bodyBuf.length) {
+      this.socket.write(bodyBuf);
+      this._bytesWritten = bodyBuf.length;
+    }
     this.socket.end();
     return this;
   }
@@ -178,7 +182,10 @@ class Response {
     const bodyless = BODYLESS_STATUS.has(this.statusCode);
     const head = this._writeHead(bodyless ? null : body.length);
     this.socket.write(head);
-    if (!this._bodySuppressed()) this.socket.write(body);
+    if (!this._bodySuppressed()) {
+      this.socket.write(body);
+      this._bytesWritten = body.length;
+    }
     this.socket.end();
     return this;
   }
@@ -205,6 +212,7 @@ class Response {
       }
       const head = this._writeHead(stats.size);
       this.socket.write(head);
+      this._bytesWritten = stats.size;
       // HEAD: same headers (incl. Content-Length) as GET, but no body.
       if (this.method === 'HEAD') {
         this.socket.end();

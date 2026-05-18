@@ -71,7 +71,9 @@ class Router {
   // static handler), so dispatch resolves only once the chain has truly
   // finished — either a response was sent or every step ran. The server must
   // not send its own fallback before this promise settles.
-  dispatch(req, res) {
+  // `trace` is an optional Flight Recorder entry + recorder; when present,
+  // each middleware step and the handler are timed into it.
+  dispatch(req, res, trace = null) {
     const chain = this.middleware.filter(
       (m) =>
         m.prefix === '/' ||
@@ -99,7 +101,15 @@ class Router {
               runStep();
             };
 
+            const t0 = process.hrtime.bigint();
             await mw.fn(req, res, next);
+            if (trace) {
+              trace.recorder.step(
+                trace.entry,
+                `middleware ${mw.fn.name || mw.prefix}`,
+                t0
+              );
+            }
             return;
           }
 
@@ -112,7 +122,15 @@ class Router {
           }
           req.params = matched.params;
           req.route = matched.route.pattern;
+          if (trace) {
+            trace.entry.route = matched.route.pattern;
+            if (matched.route.meta && matched.route.meta.bodySchema) {
+              trace.entry.validation = 'passed';
+            }
+          }
+          const h0 = process.hrtime.bigint();
           await matched.route.handler(req, res);
+          if (trace) trace.recorder.step(trace.entry, 'handler', h0);
           return resolve();
         } catch (err) {
           reject(err);

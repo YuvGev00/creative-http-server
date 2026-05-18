@@ -5,8 +5,61 @@
 // the first failed assertion.
 
 const net = require('net');
+const crypto = require('crypto');
 const path = require('path');
 const forge = require('../src/server');
+const wsproto = require('../src/websocket');
+
+// Build a masked client TEXT frame (clients MUST mask, per RFC 6455).
+function maskedTextFrame(str) {
+  const data = Buffer.from(str, 'utf8');
+  const mask = crypto.randomBytes(4);
+  const header = Buffer.from([0x81, 0x80 | data.length]);
+  const masked = Buffer.allocUnsafe(data.length);
+  for (let i = 0; i < data.length; i++) masked[i] = data[i] ^ mask[i & 3];
+  return Buffer.concat([header, mask, masked]);
+}
+
+// Open a WS connection, send one message, resolve with the echoed text.
+function wsRoundTrip(port, pathname, message) {
+  return new Promise((resolve, reject) => {
+    const key = crypto.randomBytes(16).toString('base64');
+    const sock = net.connect(port, '127.0.0.1');
+    let phase = 'handshake';
+    let buf = Buffer.alloc(0);
+    sock.on('connect', () => {
+      sock.write(
+        `GET ${pathname} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\n` +
+          `Connection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\n` +
+          `Sec-WebSocket-Version: 13\r\n\r\n`
+      );
+    });
+    sock.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (phase === 'handshake') {
+        const i = buf.indexOf('\r\n\r\n');
+        if (i === -1) return;
+        const head = buf.slice(0, i).toString();
+        const expect = wsproto.acceptKey(key);
+        if (!head.includes('101') || !head.includes(expect)) {
+          return reject(new Error('bad handshake: ' + head));
+        }
+        buf = buf.slice(i + 4);
+        phase = 'frames';
+        sock.write(maskedTextFrame(message));
+      }
+      if (phase === 'frames') {
+        const { frames } = wsproto.decodeFrames(buf);
+        if (frames.length) {
+          sock.end();
+          resolve(frames[0].payload.toString('utf8'));
+        }
+      }
+    });
+    sock.on('error', reject);
+    setTimeout(() => reject(new Error('ws timeout')), 2000);
+  });
+}
 
 let passed = 0;
 let failed = 0;
@@ -95,6 +148,9 @@ async function main() {
     res.json({ wildcard: req.params.wildcard })
   );
   app.get('/send-object', (req, res) => res.send({ via: 'send' }));
+  app.ws('/ws-echo', (conn) => {
+    conn.on('message', (m) => conn.send('echo:' + m));
+  });
   let mwRuns = 0;
   app.use('/double', (req, res, next) => {
     next();
@@ -274,6 +330,52 @@ async function main() {
     'no duplicate Content-Length header',
     clCount === 1,
     `content-length appeared ${clCount}x`
+  );
+
+  // --- Creative feature: Flight Recorder ---
+
+  // 22. /_trace?format=json records prior requests with timing + status.
+  r = await rawRequest(port, [get('/_trace?format=json')]);
+  const trace = JSON.parse(r.body);
+  const helloTrace = trace.recent.find((e) => e.path === '/api/hello');
+  ok(
+    '/_trace records request lifecycle',
+    r.status === 200 &&
+      Array.isArray(trace.recent) &&
+      helloTrace &&
+      typeof helloTrace.totalMs === 'number' &&
+      helloTrace.status === 200,
+    `recent=${trace.recent ? trace.recent.length : 'n/a'}`
+  );
+
+  // 23. /_trace HTML renders.
+  r = await rawRequest(port, [get('/_trace')]);
+  ok(
+    '/_trace HTML view renders',
+    r.status === 200 && r.body.toString().includes('Flight Recorder'),
+    `got ${r.status}`
+  );
+
+  // --- Creative feature: hand-rolled WebSocket ---
+
+  // 24. Full RFC 6455 handshake + masked frame round-trips through app.ws().
+  try {
+    const echoed = await wsRoundTrip(port, '/ws-echo', 'hello ws');
+    ok(
+      'WebSocket handshake + masked frame echo',
+      echoed === 'echo:hello ws',
+      `got "${echoed}"`
+    );
+  } catch (e) {
+    ok('WebSocket handshake + masked frame echo', false, e.message);
+  }
+
+  // 25. acceptKey matches the RFC 6455 published example vector.
+  ok(
+    'WebSocket accept key matches RFC 6455 vector',
+    wsproto.acceptKey('dGhlIHNhbXBsZSBub25jZQ==') ===
+      's3pPLMBiTxaQ9kYGzzhZRbK+xOo=',
+    'accept key mismatch'
   );
 
   server.close();

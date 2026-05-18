@@ -53,11 +53,24 @@ app.route({
   },
 });
 
+// --- Creative feature: hand-rolled WebSocket chat (broadcast) ---
+const chatClients = new Set();
+app.ws('/chat', (conn) => {
+  chatClients.add(conn);
+  conn.send(JSON.stringify({ system: `welcome — ${chatClients.size} online` }));
+  conn.on('message', (msg) => {
+    for (const c of chatClients) c.send(JSON.stringify({ msg }));
+  });
+  conn.on('close', () => chatClients.delete(conn));
+});
+
 // --- Required feature 2: static file serving ---
 app.static(path.join(__dirname, 'public'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n  ⚒  Forge demo running on http://localhost:${PORT}`);
-  console.log(`     API docs:  http://localhost:${PORT}/_routes\n`);
+  console.log(`     API docs:       http://localhost:${PORT}/_routes`);
+  console.log(`     Flight recorder: http://localhost:${PORT}/_trace`);
+  console.log(`     WebSocket chat:  http://localhost:${PORT}/chat.html\n`);
 });

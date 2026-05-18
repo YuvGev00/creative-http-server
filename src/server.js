@@ -8,6 +8,9 @@ const { extractRequest } = require('./http-parser');
 const { validate } = require('./validate');
 const docs = require('./docs');
 const serveStatic = require('./static');
+const Recorder = require('./recorder');
+const traceView = require('./trace-view');
+const ws = require('./websocket');
 
 const MAX_REQUEST_BYTES = 5 * 1024 * 1024; // guard against unbounded buffering
 const SOCKET_TIMEOUT_MS = 30 * 1000; // reap idle / wedged connections
@@ -17,8 +20,18 @@ const SOCKET_TIMEOUT_MS = 30 * 1000; // reap idle / wedged connections
 class App {
   constructor() {
     this.router = new Router();
+    this.recorder = new Recorder(50);
+    this.wsRoutes = new Map(); // exact path -> handler
     this._docsPath = '/_routes';
     this._registerDocsRoute();
+    this._registerTraceRoute();
+  }
+
+  // CREATIVE: register a WebSocket endpoint. handler(conn, req) gets a
+  // connection with .send()/.close() and .on('message'|'close').
+  ws(path, handler) {
+    this.wsRoutes.set(path, handler);
+    return this;
   }
 
   use(...args) {
@@ -92,6 +105,23 @@ class App {
     );
   }
 
+  _registerTraceRoute() {
+    this.router.add(
+      'GET',
+      '/_trace',
+      (req, res) => {
+        if ((req.query.format || '') === 'json') {
+          return res.json({ recent: this.recorder.list() });
+        }
+        res
+          .status(200)
+          .set('Content-Type', 'text/html; charset=utf-8')
+          .send(traceView.renderHtml(this.recorder.list()));
+      },
+      { hidden: true }
+    );
+  }
+
   listen(port, callback) {
     const server = net.createServer((socket) => {
       let buffer = Buffer.alloc(0);
@@ -158,10 +188,43 @@ class App {
           socket.setTimeout(0);
 
           const req = new Request(result.request, socket);
+
+          // WebSocket upgrade: hijack the socket out of the HTTP path.
+          if (ws.isUpgrade(req) && this.wsRoutes.has(req.path)) {
+            socket.setTimeout(0);
+            closed = true; // stop the HTTP read loop for this socket
+            socket.removeAllListeners('data');
+            ws.handleUpgrade(
+              req,
+              socket,
+              this.wsRoutes.get(req.path),
+              buffer
+            );
+            return;
+          }
+          if (ws.isUpgrade(req)) {
+            socket.end(
+              'HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+            );
+            closed = true;
+            return;
+          }
+
           const res = new Response(socket, req.method);
 
+          // Flight Recorder: don't record the trace endpoint itself, to
+          // avoid it filling its own log.
+          const traceEntry =
+            req.path === '/_trace' ? null : this.recorder.start(req);
+
           try {
-            await this.router.dispatch(req, res);
+            await this.router.dispatch(
+              req,
+              res,
+              traceEntry
+                ? { entry: traceEntry, recorder: this.recorder }
+                : null
+            );
             if (!res.sent) {
               res.status(404).json({ error: 'Not Found', path: req.path });
             }
@@ -172,6 +235,8 @@ class App {
                 message: err && err.message,
               });
             }
+          } finally {
+            if (traceEntry) this.recorder.finish(traceEntry, res);
           }
 
           // We send `Connection: close`, so stop after one request per
