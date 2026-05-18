@@ -101,9 +101,14 @@ class App {
       // client that declares a body it never sends, and a handler/middleware
       // that never responds — any wedged connection is reaped instead of
       // leaking a socket forever.
+      // The timeout only guards the REQUEST-READ phase (slow-loris /
+      // trickled or never-finished requests). Once a full request is
+      // parsed it is disarmed, so a legitimately slow handler is never
+      // killed mid-response.
+      let dispatching = false;
       socket.setTimeout(SOCKET_TIMEOUT_MS);
       socket.on('timeout', () => {
-        if (!closed) {
+        if (!closed && !dispatching) {
           closed = true;
           socket.end(
             'HTTP/1.1 408 Request Timeout\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
@@ -146,6 +151,11 @@ class App {
           if (!result.complete) break; // wait for more bytes
 
           buffer = buffer.slice(result.bytesConsumed);
+
+          // Full request received — disarm the read-phase timeout so a
+          // slow handler isn't reaped as if it were a slow client.
+          dispatching = true;
+          socket.setTimeout(0);
 
           const req = new Request(result.request, socket);
           const res = new Response(socket, req.method);

@@ -55,7 +55,7 @@ function parseResponse(buf) {
       .slice(c + 1)
       .trim();
   }
-  return { status, headers, body: buf.slice(idx + 4) };
+  return { status, headers, rawHead: head, body: buf.slice(idx + 4) };
 }
 
 function get(p) {
@@ -244,6 +244,37 @@ async function main() {
     'Content-Length: 999999999\r\nConnection: close\r\n\r\n';
   r = await rawRequest(port, [huge]);
   ok('oversized Content-Length -> 413', r.status === 413, `got ${r.status}`);
+
+  // --- Regression tests for the final (holistic) review ---
+
+  // 20. res.status() with an injected string must not split the response.
+  app.get('/badstatus', (req, res) => {
+    try {
+      res.status('200\r\nX-Injected: yes').send('hi');
+    } catch {
+      res.status(500).json({ blocked: true });
+    }
+  });
+  r = await rawRequest(port, [get('/badstatus')]);
+  ok(
+    'status() injection blocked',
+    !r.headers['x-injected'] && r.status === 500,
+    `injected? ${!!r.headers['x-injected']} status ${r.status}`
+  );
+
+  // 21. set('content-length') must not produce a duplicate Content-Length.
+  app.get('/dupcl', (req, res) => {
+    res.set('content-length', '999').send('ok');
+  });
+  r = await rawRequest(port, [get('/dupcl')]);
+  const clCount = r.rawHead
+    ? (r.rawHead.match(/content-length/gi) || []).length
+    : (Object.keys(r.headers).filter((k) => k === 'content-length').length);
+  ok(
+    'no duplicate Content-Length header',
+    clCount === 1,
+    `content-length appeared ${clCount}x`
+  );
 
   server.close();
   console.log(`\n${passed} passed, ${failed} failed`);

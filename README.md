@@ -13,7 +13,7 @@ node examples/demo.js      # or: npm start
 # → http://localhost:3000
 # → http://localhost:3000/_routes   (live API reference)
 
-node test/smoke.js         # or: npm test  (10 assertions, raw-socket driven)
+node test/smoke.js         # or: npm test  (22 assertions, raw-socket driven)
 ```
 
 ## API design choices
@@ -48,7 +48,8 @@ app.listen(3000, () => console.log('up'));
   `Content-Type`), `req.rawBody`, `req.ip`.
 - **Response** — chainable `status()`, `set()`, `type()`, `json()`, `send()`,
   `redirect()`, `sendFile()` (streamed, correct MIME + `Content-Length`).
-- **Router** — `:param` and trailing `*` wildcard patterns; per-method tables;
+- **Router** — `:param` and trailing `*` wildcard patterns; routes matched in
+  registration order by method + path;
   `app.use(fn)` / `app.use('/prefix', fn)` middleware running in registration
   order with `next()`; automatic `404` and `500` fallbacks.
 - **Static** — virtual mount paths, directory `index.html`, MIME inference,
@@ -118,15 +119,18 @@ src/mime.js         Extension → MIME map
 src/validate.js     Declarative schema validator   (creative)
 src/docs.js         Live /_routes reference renderer (creative)
 examples/demo.js    Wires every feature together
-test/smoke.js       10 raw-socket assertions, exits non-zero on failure
+test/smoke.js       22 raw-socket assertions, exits non-zero on failure
 ```
 
 ## Verification
 
 `npm test` boots the framework on an ephemeral port and drives it with a raw
-`net` client, asserting: JSON routes, path params, valid/invalid typed-route
-validation, static MIME, traversal blocking, the live docs (HTML + JSON), a
-split-across-TCP-chunks request, and 404 handling.
+`net` client (22 assertions), covering: JSON routes, path params,
+valid/invalid typed-route validation, static MIME, traversal blocking, the
+live docs (HTML + JSON), a split-across-TCP-chunks request, 404 handling, and
+hardening cases — malformed/conflicting `Content-Length`, rejected chunked
+encoding, wildcard routes, `HEAD` no-body, CRLF header-injection, `send()`
+with an object, double-`next()`, NUL-byte paths, and oversized-body `413`.
 
 ## Possible extensions (out of scope here)
 

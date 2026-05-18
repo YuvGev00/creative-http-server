@@ -57,8 +57,25 @@ class Response {
   }
 
   status(code) {
-    this.statusCode = code;
+    // Coerce and bound-check: a non-numeric status (e.g. user input) would
+    // otherwise be written verbatim into the status line and could inject
+    // headers / split the response.
+    const n = Number(code);
+    if (!Number.isInteger(n) || n < 100 || n > 599) {
+      throw new Error(`Invalid HTTP status code: ${code}`);
+    }
+    this.statusCode = n;
     return this;
+  }
+
+  // Canonicalize a header name so set('content-length') and the auto
+  // 'Content-Length' don't both get emitted (duplicate-header bug).
+  _canonical(name) {
+    const lower = String(name).toLowerCase();
+    for (const existing of Object.keys(this.headers)) {
+      if (existing.toLowerCase() === lower) return existing;
+    }
+    return name;
   }
 
   set(key, value) {
@@ -68,29 +85,37 @@ class Response {
     if (/[\r\n]/.test(String(key)) || /[\r\n]/.test(String(value))) {
       throw new Error('Invalid characters (CR/LF) in header');
     }
-    this.headers[key] = value;
+    this.headers[this._canonical(key)] = value;
     return this;
   }
 
   type(contentType) {
-    this.headers['Content-Type'] = contentType;
+    this.headers[this._canonical('Content-Type')] = contentType;
     return this;
+  }
+
+  // Case-insensitive "is this header already set by the caller?"
+  _has(name) {
+    const lower = name.toLowerCase();
+    return Object.keys(this.headers).some((k) => k.toLowerCase() === lower);
   }
 
   _writeHead(bodyLength) {
     const text = STATUS_TEXT[this.statusCode] || 'Unknown';
     let head = `HTTP/1.1 ${this.statusCode} ${text}\r\n`;
 
-    if (bodyLength !== null && this.headers['Content-Length'] === undefined) {
+    // Only add managed defaults if the caller hasn't already set them
+    // (under any casing) — avoids emitting duplicate Content-Length etc.
+    if (bodyLength !== null && !this._has('Content-Length')) {
       this.headers['Content-Length'] = bodyLength;
     }
-    if (this.headers['Connection'] === undefined) {
+    if (!this._has('Connection')) {
       this.headers['Connection'] = 'close';
     }
-    if (this.headers['Date'] === undefined) {
+    if (!this._has('Date')) {
       this.headers['Date'] = new Date().toUTCString();
     }
-    if (this.headers['Server'] === undefined) {
+    if (!this._has('Server')) {
       this.headers['Server'] = 'Forge/1.0';
     }
 
