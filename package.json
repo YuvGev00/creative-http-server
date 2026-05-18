@@ -9,6 +9,6 @@
     "demo": "node examples/demo.js",
     "test": "node test/smoke.js"
   },
-  "author": "Yuval Gev",
+  "author": "Yuval Geva",
   "license": "MIT"
 }

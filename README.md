@@ -133,4 +133,4 @@ split-across-TCP-chunks request, and 404 handling.
 HTTP keep-alive connection reuse, TLS/HTTPS, HTTP/2, chunked
 transfer-encoding, `multipart/form-data`, and cookie/session support.
 
-— Yuval Gev
+— Yuval Geva
