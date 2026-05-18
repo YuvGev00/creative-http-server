@@ -64,46 +64,6 @@ app.ws('/chat', (conn) => {
   conn.on('close', () => chatClients.delete(conn));
 });
 
-// --- Creative feature: Streaming Lab ---
-
-// Chunked Transfer Theater: the page assembles itself live, one
-// hand-built HTTP/1.1 chunk at a time.
-app.get('/demo/chunked', (req, res) => {
-  const stream = res.chunked('text/html; charset=utf-8');
-  stream.write(
-    '<!doctype html><meta charset="utf-8">' +
-      '<body style="font-family:ui-monospace,Menlo,monospace;background:#0d1117;color:#e6edf3;padding:2rem;line-height:1.8">' +
-      '<h2>⚒ Chunked Transfer Theater</h2>' +
-      '<p>Each line below is a separate HTTP chunk, written by the raw ' +
-      '<code>net</code> server with a delay. Watch it build:</p>'
-  );
-  let n = 0;
-  const timer = setInterval(() => {
-    n++;
-    stream.write(
-      `<div>chunk #${n} · ${new Date().toISOString()} · ` +
-        'sent without buffering the whole page</div>'
-    );
-    if (n >= 8) {
-      clearInterval(timer);
-      stream.end('<p style="color:#36b37e">✓ stream complete (0-length chunk sent)</p></body>');
-    }
-  }, 450);
-});
-
-// Server-Sent Events: a one-way live feed over plain HTTP (no WebSocket).
-app.get('/demo/sse', (req, res) => {
-  const channel = res.sse();
-  let i = 0;
-  channel.send({ hello: 'SSE stream open', at: new Date().toISOString() }, 'open');
-  const timer = setInterval(() => {
-    if (channel.closed) return clearInterval(timer);
-    i++;
-    channel.send({ tick: i, time: new Date().toISOString() }, 'tick');
-    if (i >= 1000) clearInterval(timer); // safety bound
-  }, 1000);
-});
-
 // --- Required feature 2: static file serving ---
 app.static(path.join(__dirname, 'public'));
 
@@ -112,6 +72,5 @@ app.listen(PORT, () => {
   console.log(`\n  ⚒  Forge demo running on http://localhost:${PORT}`);
   console.log(`     API docs:       http://localhost:${PORT}/_routes`);
   console.log(`     Flight recorder: http://localhost:${PORT}/_trace`);
-  console.log(`     WebSocket chat:  http://localhost:${PORT}/chat.html`);
-  console.log(`     Streaming Lab:   http://localhost:${PORT}/streaming-lab.html\n`);
+  console.log(`     WebSocket chat:  http://localhost:${PORT}/chat.html\n`);
 });
