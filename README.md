@@ -14,7 +14,7 @@ node examples/demo.js      # or: npm start
 # → http://localhost:3000
 # → http://localhost:3000/_routes   (live API reference)
 
-node test/smoke.js         # or: npm test  (30 assertions, raw-socket driven)
+node test/smoke.js         # or: npm test  (34 assertions, raw-socket driven)
 ```
 
 ## API design choices
@@ -129,10 +129,26 @@ the server picks a secret word and a drawer, the drawer paints on a canvas
 (strokes broadcast live to everyone), others race to guess in chat. Correct
 guesses score by speed, the drawer earns points too, rounds rotate the drawer
 and run on a timer. The word is sent **only to the drawer** — the server
-tailors per-player state so guessers never see it. Game rules live in
-`src/draw-game.js` as transport-agnostic logic (unit-tested directly); the
-demo's `/game` WebSocket route just relays messages. Open `/game.html` in two
-tabs (or share with a friend) to play.
+tailors per-player state so guessers never see it.
+
+Built to actually scale to many simultaneous tabs:
+
+- **Server-authoritative canvas.** Every stroke / fill / undo / clear is
+  validated (only the drawer, only mid-round) and appended to a bounded
+  **op log**. A tab that joins or reconnects mid-game receives the whole log
+  in one *snapshot* and replays it, so many clients never desync.
+- **Spectators.** A player who joins during a round watches it live, then
+  plays the next — they can't score that round (no word-peeking).
+- **Auto-reconnect.** The client transparently rejoins on a dropped socket
+  and is resynced from the snapshot.
+- **Real drawing tools.** Six colors, three brush sizes, eraser, flood-fill,
+  undo, clear — plus a live scoreboard, round/timer HUD, "so close!"
+  feedback, and confetti on a correct guess.
+
+Game rules live in `src/draw-game.js` as transport-agnostic logic
+(unit-tested directly, incl. op-log replay and spectator rules); the `/game`
+WebSocket route just relays messages. Open `/game.html` in several tabs
+(or share with friends) to play.
 
 ## How it works under the hood
 
@@ -168,13 +184,13 @@ src/trace-view.js   Live /_trace timeline renderer   (creative 2)
 src/websocket.js    RFC 6455 handshake + frame codec (creative 3)
 src/draw-game.js    Draw & Guess game rules (transport-agnostic, creative 4)
 examples/demo.js    Wires every feature (incl. /chat + /game WebSockets)
-test/smoke.js       30 raw-socket assertions, exits non-zero on failure
+test/smoke.js       34 raw-socket assertions, exits non-zero on failure
 ```
 
 ## Verification
 
 `npm test` boots the framework on an ephemeral port and drives it with a raw
-`net` client (30 assertions), covering: JSON routes, path params,
+`net` client (34 assertions), covering: JSON routes, path params,
 valid/invalid typed-route validation, static MIME, traversal blocking, the
 live docs (HTML + JSON), a split-across-TCP-chunks request, 404 handling,
 hardening cases — malformed/conflicting `Content-Length`, rejected chunked

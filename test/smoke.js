@@ -427,6 +427,51 @@ async function main() {
       typeof sDrawer.word === 'string' && sOther.word === null,
       `drawer.word=${sDrawer.word} other.word=${sOther.word}`
     );
+
+    // --- new robustness/brush behaviours ---
+    const d = g.drawerId;
+    const other = d === 'a' ? 'b' : 'a';
+
+    // Drawer strokes are recorded in the authoritative op log; a
+    // non-drawer's stroke is rejected.
+    g.canvasOp(d, { t: 'stroke', s: { x0: 0, y0: 0, x1: 5, y1: 5, c: '#111', w: 8 } });
+    g.canvasOp(d, { t: 'fill', c: '#abc' });
+    const rejected = g.canvasOp(other, { t: 'stroke', s: { x0: 0, y0: 0, x1: 1, y1: 1 } });
+    ok(
+      'game: op log records drawer ops, rejects non-drawer',
+      g.ops.length === 2 && rejected === false,
+      `ops=${g.ops.length} rejected=${rejected}`
+    );
+
+    // Late joiner gets a snapshot containing the full op log to replay.
+    let snap = null;
+    g.onBroadcast((e) => { if (e.type === 'snapshot' && e._to === 'c') snap = e; });
+    g.addPlayer('c', 'Carol');
+    ok(
+      'game: late joiner gets snapshot with op log + is spectator',
+      snap && Array.isArray(snap.ops) && snap.ops.length === 2 &&
+        g.players.get('c')._spectating === true,
+      `snap=${!!snap} ops=${snap ? snap.ops.length : 'n/a'}`
+    );
+
+    // A spectator (joined mid-round) cannot score even with the right word.
+    const cBefore = g.players.get('c').score;
+    g.guess('c', g.word);
+    ok(
+      'game: mid-round spectator cannot score',
+      g.players.get('c').score === cBefore,
+      `score=${g.players.get('c').score}`
+    );
+
+    // Undo drops the last op and rebroadcasts the full log (replace).
+    let replaced = null;
+    g.onBroadcast((e) => { if (e.type === 'replace') replaced = e; });
+    g.canvasOp(d, { t: 'undo' });
+    ok(
+      'game: undo removes last op and emits replace',
+      g.ops.length === 1 && replaced && replaced.ops.length === 1,
+      `ops=${g.ops.length} replace=${!!replaced}`
+    );
   }
 
   server.close();

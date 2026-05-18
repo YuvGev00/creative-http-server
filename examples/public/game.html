@@ -12,102 +12,141 @@
       background: radial-gradient(circle at 50% 0%, #1a2233, #0d1117);
       color: #e6edf3; min-height: 100vh; padding: 2vh 3vw;
     }
-    h1 { text-align: center; font-size: clamp(1.6rem, 3vw, 2.4rem);
-      margin-bottom: .3rem; }
-    .sub { text-align: center; color: #9aa6b2; margin-bottom: 1.2rem;
-      font-size: .95rem; }
+    h1 { text-align: center; font-size: clamp(1.5rem, 3vw, 2.2rem); }
+    .sub { text-align: center; color: #9aa6b2; font-size: .9rem;
+      margin: .3rem 0 1.1rem; }
     code { background:#21262d; padding:.1rem .4rem; border-radius:5px;
       font-family:ui-monospace,Menlo,monospace; }
 
     #join { max-width: 420px; margin: 6vh auto; text-align: center;
       background:#161b22; border:1px solid #21262d; border-radius:14px;
       padding: 2rem; }
-    #join input { width: 100%; padding: .9rem 1rem; margin: 1rem 0;
+    #join input { width:100%; padding:.9rem 1rem; margin:1rem 0;
       border-radius:10px; border:1px solid #30425f; background:#0d1117;
       color:#e6edf3; font-size:1.05rem; }
-    button { padding:.85rem 1.4rem; border:0; border-radius:10px;
-      background:#4c9aff; color:#04122b; font-weight:700; font-size:1rem;
-      cursor:pointer; }
+    button { padding:.8rem 1.3rem; border:0; border-radius:10px;
+      background:#4c9aff; color:#04122b; font-weight:700; cursor:pointer; }
     button:hover { background:#6db0ff; }
-    button:disabled { opacity:.4; cursor:not-allowed; }
+    button:disabled { opacity:.35; cursor:not-allowed; }
 
-    #game { display:none; max-width: 1050px; margin: 0 auto;
-      grid-template-columns: 1fr 280px; gap: 1.2rem; }
-    @media (max-width: 820px){ #game{ grid-template-columns:1fr; } }
+    #game { display:none; max-width:1080px; margin:0 auto;
+      grid-template-columns:1fr 290px; gap:1.1rem; }
+    @media (max-width:860px){ #game{ grid-template-columns:1fr; } }
 
     .bar { grid-column:1/-1; display:flex; align-items:center; gap:1rem;
       background:#161b22; border:1px solid #21262d; border-radius:12px;
-      padding:.8rem 1.2rem; flex-wrap:wrap; }
-    .word { font-size:1.2rem; letter-spacing:.3em; font-weight:700; }
+      padding:.7rem 1.1rem; flex-wrap:wrap; }
+    .pill { font-size:.8rem; padding:.25rem .6rem; border-radius:999px;
+      background:#21314a; color:#9fc1ff; }
+    .word { font-size:1.15rem; letter-spacing:.32em; font-weight:700; }
     .timer { margin-left:auto; font-variant-numeric:tabular-nums;
-      color:#ffab00; font-weight:700; }
-    .role { color:#9aa6b2; }
+      font-weight:700; font-size:1.05rem; }
+    .timer.low { color:#ff5630; }
+    .conn { width:9px; height:9px; border-radius:50%; background:#f85149; }
+    .conn.on { background:#36b37e; }
 
     .panel { background:#161b22; border:1px solid #21262d;
-      border-radius:14px; overflow:hidden; }
+      border-radius:14px; overflow:hidden; position:relative; }
+    .canvas-wrap { position:relative; }
     #board { display:block; width:100%; background:#fff; cursor:crosshair;
-      touch-action:none; }
-    .tools { display:flex; gap:.5rem; padding:.7rem 1rem; flex-wrap:wrap;
-      border-top:1px solid #21262d; align-items:center; }
-    .sw { width:26px; height:26px; border-radius:50%; cursor:pointer;
-      border:2px solid #0d1117; }
-    .sw.active { border-color:#fff; }
-    .tools button { padding:.45rem .9rem; font-size:.85rem; }
+      touch-action:none; aspect-ratio: 760 / 460; }
+    #board.locked { cursor:not-allowed; }
+    #veil { position:absolute; inset:0; display:none; align-items:center;
+      justify-content:center; background:rgba(13,17,23,.55);
+      color:#e6edf3; font-size:1.1rem; text-align:center; padding:1rem;
+      backdrop-filter:blur(2px); }
 
-    .side { display:flex; flex-direction:column; gap:1.2rem; }
+    .tools { display:flex; gap:.55rem; padding:.7rem 1rem; flex-wrap:wrap;
+      border-top:1px solid #21262d; align-items:center; }
+    .tools[hidden]{ display:none; }
+    .sw { width:26px; height:26px; border-radius:50%; cursor:pointer;
+      border:3px solid #0d1117; }
+    .sw.active { border-color:#fff; }
+    .size { width:30px; height:30px; border-radius:8px; cursor:pointer;
+      background:#0d1117; border:1px solid #30425f; display:flex;
+      align-items:center; justify-content:center; }
+    .size.active { border-color:#4c9aff; }
+    .size i { display:block; border-radius:50%; background:#e6edf3; }
+    .tools button { padding:.45rem .85rem; font-size:.85rem;
+      background:#243049; color:#e6edf3; }
+    .tools button:hover { background:#2d3b57; }
+    .tool.active { outline:2px solid #4c9aff; }
+
+    .side { display:flex; flex-direction:column; gap:1.1rem; }
     .scores, .chatbox { background:#161b22; border:1px solid #21262d;
       border-radius:14px; overflow:hidden; }
-    .scores h3, .chatbox h3 { padding:.7rem 1rem; font-size:.9rem;
-      color:#8b949e; border-bottom:1px solid #21262d; }
-    .scores ul { list-style:none; }
+    .scores h3, .chatbox h3 { padding:.6rem 1rem; font-size:.82rem;
+      color:#8b949e; border-bottom:1px solid #21262d;
+      display:flex; justify-content:space-between; }
+    .scores ul { list-style:none; max-height:200px; overflow-y:auto; }
     .scores li { display:flex; justify-content:space-between;
-      padding:.5rem 1rem; font-size:.95rem; border-bottom:1px solid #1c222b; }
-    .scores li.draw { color:#4c9aff; }
-    #log { height:220px; overflow-y:auto; padding:.8rem 1rem;
-      display:flex; flex-direction:column; gap:.35rem; font-size:.9rem; }
+      padding:.45rem 1rem; font-size:.92rem; border-bottom:1px solid #1c222b;
+      align-items:center; }
+    .scores li.draw { color:#9fc1ff; }
+    .scores li.spec { opacity:.5; }
+    .tag { font-size:.7rem; background:#243049; padding:.1rem .4rem;
+      border-radius:6px; margin-left:.4rem; }
+    #log { height:230px; overflow-y:auto; padding:.7rem 1rem;
+      display:flex; flex-direction:column; gap:.3rem; font-size:.9rem; }
     #log .sys { color:#8b949e; font-style:italic; }
-    #log .me { color:#36b37e; }
-    form { display:flex; gap:.5rem; padding:.7rem 1rem;
+    #log .ok { color:#36b37e; font-weight:600; }
+    form { display:flex; gap:.5rem; padding:.6rem 1rem;
       border-top:1px solid #21262d; }
     form input { flex:1; padding:.6rem .8rem; border-radius:8px;
       border:1px solid #30425f; background:#0d1117; color:#e6edf3; }
+    .confetti { position:fixed; inset:0; pointer-events:none; z-index:9; }
   </style>
 </head>
 <body>
   <h1>⚒ Draw &amp; Guess</h1>
   <p class="sub">Multiplayer Pictionary over a hand-rolled WebSocket on raw
-     <code>net</code>. Open in 2+ tabs (or share with a friend) to play.</p>
+     <code>net</code>. Open in several tabs — late joiners watch the current
+     round, then play the next.</p>
 
   <div id="join">
     <h3>Enter a name to play</h3>
     <input id="name" maxlength="16" placeholder="Your name" autocomplete="off">
     <button id="go">Join game →</button>
-    <p class="sub" style="margin-top:1rem">Need 2 players. Open a second tab
-       and join again to start a round.</p>
+    <p class="sub" style="margin-top:1rem">Need 2 players. Open another tab
+       and join to start.</p>
   </div>
 
   <div id="game">
     <div class="bar">
+      <span class="conn" id="conn" title="connection"></span>
+      <span class="pill" id="roundPill">—</span>
       <span class="role" id="role">connecting…</span>
       <span class="word" id="word"></span>
       <span class="timer" id="timer"></span>
     </div>
 
     <div class="panel">
-      <canvas id="board" width="760" height="460"></canvas>
-      <div class="tools" id="tools">
+      <div class="canvas-wrap">
+        <canvas id="board" width="760" height="460"></canvas>
+        <div id="veil"></div>
+      </div>
+      <div class="tools" id="tools" hidden>
         <span class="sw active" style="background:#111" data-c="#111111"></span>
         <span class="sw" style="background:#e23636" data-c="#e23636"></span>
         <span class="sw" style="background:#36b37e" data-c="#36b37e"></span>
         <span class="sw" style="background:#4c9aff" data-c="#4c9aff"></span>
         <span class="sw" style="background:#ffab00" data-c="#ffab00"></span>
-        <button id="clear">Clear</button>
-        <span class="sub" id="hint" style="margin:0 0 0 auto"></span>
+        <span class="sw" style="background:#b65cff" data-c="#b65cff"></span>
+        <span class="size active" data-w="4"><i style="width:6px;height:6px"></i></span>
+        <span class="size" data-w="12"><i style="width:12px;height:12px"></i></span>
+        <span class="size" data-w="26"><i style="width:20px;height:20px"></i></span>
+        <button class="tool" id="eraser">🩹 Eraser</button>
+        <button id="fill">🪣 Fill</button>
+        <button id="undo">↶ Undo</button>
+        <button id="clear">🗑 Clear</button>
       </div>
     </div>
 
     <div class="side">
-      <div class="scores"><h3>SCOREBOARD</h3><ul id="scores"></ul></div>
+      <div class="scores">
+        <h3><span>SCOREBOARD</span><span id="pcount"></span></h3>
+        <ul id="scores"></ul>
+      </div>
       <div class="chatbox">
         <h3>GUESSES &amp; CHAT</h3>
         <div id="log"></div>
@@ -116,27 +155,42 @@
       </div>
     </div>
   </div>
+  <canvas class="confetti" id="cc"></canvas>
 
   <script>
     const $ = (id) => document.getElementById(id);
-    let ws, me = { drawer: false }, endsAt = 0, color = '#111111';
+    let ws, drawer = false, spectator = false, endsAt = 0;
+    let color = '#111111', size = 4, erasing = false;
+    let myName = '';
 
-    $('go').onclick = () => {
-      const name = $('name').value.trim() || 'anon';
+    // ---- connection (with auto-reconnect) ----
+    function connect() {
       ws = new WebSocket(`ws://${location.host}/game`);
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'join', name }));
+      ws.onopen = () => {
+        $('conn').classList.add('on');
+        ws.send(JSON.stringify({ type: 'join', name: myName }));
+      };
       ws.onmessage = (e) => handle(JSON.parse(e.data));
-      ws.onclose = () => addLog('disconnected', 'sys');
+      ws.onclose = () => {
+        $('conn').classList.remove('on');
+        addLog('disconnected — reconnecting…', 'sys');
+        setTimeout(connect, 1200);
+      };
+    }
+    $('go').onclick = () => {
+      myName = $('name').value.trim() || 'anon';
       $('join').style.display = 'none';
       $('game').style.display = 'grid';
+      connect();
     };
     $('name').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') $('go').click();
     });
 
+    // ---- canvas ----
     const canvas = $('board'), ctx = canvas.getContext('2d');
-    ctx.lineWidth = 4; ctx.lineCap = 'round';
-    let drawing = false, last = null;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    let painting = false, last = null;
 
     function pos(e) {
       const r = canvas.getBoundingClientRect();
@@ -146,43 +200,78 @@
         y: (t.clientY - r.top) * (canvas.height / r.height),
       };
     }
-    function stroke(s, broadcast) {
-      ctx.strokeStyle = s.c; ctx.beginPath();
-      ctx.moveTo(s.x0, s.y0); ctx.lineTo(s.x1, s.y1); ctx.stroke();
-      if (broadcast && ws && ws.readyState === 1)
-        ws.send(JSON.stringify({ type: 'stroke', s }));
+    // Apply one op to the local canvas (used live AND for replay).
+    function apply(op) {
+      if (op.t === 'stroke') {
+        ctx.globalCompositeOperation =
+          op.erase ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = op.c; ctx.lineWidth = op.w;
+        ctx.beginPath(); ctx.moveTo(op.x0, op.y0);
+        ctx.lineTo(op.x1, op.y1); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (op.t === 'fill') {
+        ctx.fillStyle = op.c;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     }
-    function start(e) {
-      if (!me.drawer) return;
-      drawing = true; last = pos(e); e.preventDefault();
-    }
-    function move(e) {
-      if (!drawing || !me.drawer) return;
-      const p = pos(e);
-      stroke({ x0: last.x, y0: last.y, x1: p.x, y1: p.y, c: color }, true);
-      last = p; e.preventDefault();
-    }
-    const stop = () => (drawing = false);
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', stop);
-    canvas.addEventListener('touchstart', start);
-    canvas.addEventListener('touchmove', move);
-    canvas.addEventListener('touchend', stop);
-
-    $('tools').addEventListener('click', (e) => {
-      if (!e.target.dataset.c) return;
-      color = e.target.dataset.c;
-      document.querySelectorAll('.sw').forEach((s) =>
-        s.classList.toggle('active', s === e.target));
-    });
-    $('clear').onclick = () => {
-      if (me.drawer && ws) ws.send(JSON.stringify({ type: 'clear' }));
-    };
     function clearCanvas() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
+    function replay(ops) {
+      clearCanvas();
+      for (const op of ops) apply(op);
+    }
+    function sendOp(op) {
+      if (ws && ws.readyState === 1)
+        ws.send(JSON.stringify({ type: 'op', op }));
+    }
 
+    function down(e) {
+      if (!drawer) return;
+      painting = true; last = pos(e); e.preventDefault();
+    }
+    function moveTo(e) {
+      if (!painting || !drawer) return;
+      const p = pos(e);
+      const op = {
+        t: 'stroke', x0: last.x, y0: last.y, x1: p.x, y1: p.y,
+        c: color, w: size, erase: erasing,
+      };
+      apply(op);                       // instant local feedback
+      sendOp({ t: 'stroke', s: op }); // server records + broadcasts
+      last = p; e.preventDefault();
+    }
+    const up = () => (painting = false);
+    canvas.addEventListener('mousedown', down);
+    canvas.addEventListener('mousemove', moveTo);
+    window.addEventListener('mouseup', up);
+    canvas.addEventListener('touchstart', down, { passive:false });
+    canvas.addEventListener('touchmove', moveTo, { passive:false });
+    canvas.addEventListener('touchend', up);
+
+    // ---- toolbar ----
+    document.querySelectorAll('.sw').forEach((s) =>
+      s.addEventListener('click', () => {
+        color = s.dataset.c; erasing = false;
+        $('eraser').classList.remove('active');
+        document.querySelectorAll('.sw').forEach((x) =>
+          x.classList.toggle('active', x === s));
+      }));
+    document.querySelectorAll('.size').forEach((s) =>
+      s.addEventListener('click', () => {
+        size = +s.dataset.w;
+        document.querySelectorAll('.size').forEach((x) =>
+          x.classList.toggle('active', x === s));
+      }));
+    $('eraser').onclick = () => {
+      erasing = !erasing;
+      $('eraser').classList.toggle('active', erasing);
+    };
+    $('fill').onclick = () => { if (drawer) sendOp({ t:'fill', c:color }); };
+    $('undo').onclick = () => { if (drawer) sendOp({ t:'undo' }); };
+    $('clear').onclick = () => { if (drawer) sendOp({ t:'clear' }); };
+
+    // ---- guesses ----
     $('gf').addEventListener('submit', (ev) => {
       ev.preventDefault();
       const v = $('guess').value.trim();
@@ -192,6 +281,7 @@
       }
     });
 
+    // ---- UI helpers ----
     function addLog(text, cls) {
       const d = document.createElement('div');
       if (cls) d.className = cls;
@@ -199,52 +289,100 @@
       $('log').appendChild(d);
       $('log').scrollTop = $('log').scrollHeight;
     }
-    function renderScores(players) {
-      $('scores').innerHTML = players
-        .sort((a, b) => b.score - a.score)
-        .map((p) => `<li class="${p.drawing ? 'draw' : ''}">
-          <span>${p.drawing ? '✏️ ' : ''}${esc(p.name)}</span>
-          <strong>${p.score}</strong></li>`)
-        .join('');
-    }
     function esc(s){ return String(s).replace(/[&<>]/g,
       c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
+    function renderPlayers(players) {
+      $('pcount').textContent = players.length + ' online';
+      $('scores').innerHTML = players
+        .slice().sort((a,b)=>b.score-a.score)
+        .map((p) => {
+          const tags = [];
+          if (p.drawing) tags.push('<span class="tag">✏️ drawing</span>');
+          if (p.spectating) tags.push('<span class="tag">👀 watching</span>');
+          if (p.guessed) tags.push('<span class="tag">✓</span>');
+          return `<li class="${p.drawing?'draw':''} ${p.spectating?'spec':''}">
+            <span>${esc(p.name)}${tags.join('')}</span>
+            <strong>${p.score}</strong></li>`;
+        }).join('');
+    }
+    function setVeil(text) {
+      const v = $('veil');
+      if (text) { v.textContent = text; v.style.display = 'flex'; }
+      else v.style.display = 'none';
+    }
     function applyState(m) {
-      me.drawer = m.youAreDrawer;
-      if (m.players) renderScores(m.players);
+      drawer = m.youAreDrawer; spectator = m.youAreSpectator;
       endsAt = m.endsAt || 0;
+      if (m.players) renderPlayers(m.players);
+      $('roundPill').textContent = m.round ? 'Round ' + m.round : '—';
+      $('tools').hidden = !drawer;
+      canvas.classList.toggle('locked', !drawer);
+
       if (!m.roundActive) {
-        $('role').textContent = 'Waiting…';
+        $('role').textContent = 'Waiting for players…';
         $('word').textContent = '';
-        $('hint').textContent = '';
+        setVeil('Waiting for 2+ players to start a round');
         return;
       }
-      if (m.youAreDrawer) {
-        $('role').textContent = '✏️ You are drawing:';
+      if (drawer) {
+        $('role').textContent = '✏️ You draw:';
         $('word').textContent = m.word;
-        $('hint').textContent = 'Draw it — others guess!';
+        setVeil('');
       } else {
         $('role').textContent = `${m.drawerName || '?'} is drawing`;
         $('word').textContent = '_ '.repeat(m.wordLength).trim();
-        $('hint').textContent = 'Guess in the box →';
+        setVeil(spectator
+          ? '👀 You joined mid-round — you can play next round'
+          : '');
       }
     }
 
     function handle(m) {
-      if (m.type === 'state') applyState(m);
-      else if (m.type === 'players') renderScores(m.players);
-      else if (m.type === 'stroke') stroke(m.s, false);
-      else if (m.type === 'clear') clearCanvas();
-      else if (m.type === 'system') addLog(m.text, 'sys');
-      else if (m.type === 'chat') addLog(`${m.name}: ${m.text}`);
+      switch (m.type) {
+        case 'snapshot': applyState(m); replay(m.ops || []); break;
+        case 'state':    applyState(m); break;
+        case 'players':  renderPlayers(m.players); break;
+        case 'op':       apply(m.op); break;
+        case 'replace':  replay(m.ops || []); break;
+        case 'clear':    clearCanvas(); break;
+        case 'reveal':
+          if (!drawer) { $('word').textContent = m.word; }
+          break;
+        case 'system':   addLog(m.text, 'sys'); break;
+        case 'chat':     addLog(`${m.name}: ${m.text}`); break;
+        case 'correct':
+          addLog(`🎉 ${m.name} guessed it!`, 'ok');
+          if (m.name === myName || drawer) burst();
+          break;
+      }
     }
 
+    // ---- timer ----
     setInterval(() => {
       if (!endsAt) { $('timer').textContent = ''; return; }
       const s = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
-      $('timer').textContent = `⏱ ${s}s`;
+      $('timer').textContent = '⏱ ' + s + 's';
+      $('timer').classList.toggle('low', s <= 10);
     }, 250);
+
+    // ---- tiny confetti on correct guess ----
+    const cc = $('cc'), cx = cc.getContext('2d');
+    let parts = [];
+    function resizeCC(){ cc.width=innerWidth; cc.height=innerHeight; }
+    addEventListener('resize', resizeCC); resizeCC();
+    function burst() {
+      for (let i=0;i<90;i++) parts.push({
+        x:innerWidth/2, y:innerHeight/3, vx:(Math.random()-.5)*9,
+        vy:Math.random()*-9-3, life:60,
+        c:`hsl(${Math.random()*360},90%,60%)` });
+    }
+    (function loop(){
+      cx.clearRect(0,0,cc.width,cc.height);
+      parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=.35; p.life--;
+        cx.fillStyle=p.c; cx.fillRect(p.x,p.y,5,5); });
+      parts = parts.filter(p=>p.life>0);
+      requestAnimationFrame(loop);
+    })();
   </script>
 </body>
 </html>

@@ -93,19 +93,15 @@ app.ws('/game', (conn) => {
     try { m = JSON.parse(raw); } catch { return; }
 
     if (m.type === 'join') {
+      if (joined) return;
       joined = true;
-      game.addPlayer(id, m.name);
-      conn.send(JSON.stringify(game.stateFor(id)));
+      game.addPlayer(id, m.name); // emits a snapshot to this player
     } else if (!joined) {
       return;
-    } else if (m.type === 'stroke' && id === game.drawerId) {
-      // Relay drawing strokes to everyone else (drawer is authoritative).
-      for (const [pid, c] of gameConns) {
-        if (pid !== id) c.send(JSON.stringify({ type: 'stroke', s: m.s }));
-      }
-    } else if (m.type === 'clear' && id === game.drawerId) {
-      for (const c of gameConns.values())
-        c.send(JSON.stringify({ type: 'clear' }));
+    } else if (m.type === 'op') {
+      // All canvas actions (stroke/fill/undo/clear) go through the
+      // server, which validates the drawer and keeps the op log.
+      game.canvasOp(id, m.op);
     } else if (m.type === 'guess') {
       game.guess(id, m.text);
     }

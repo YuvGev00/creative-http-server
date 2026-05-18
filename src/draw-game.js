@@ -3,16 +3,25 @@
 // CREATIVE FEATURE — multiplayer Draw & Guess (Pictionary).
 //
 // Pure game state + rules, deliberately transport-agnostic so it can be
-// unit-tested without sockets. The WebSocket route in the demo just relays
-// JSON messages in and broadcasts the resulting events out.
+// unit-tested without sockets. The WebSocket route just relays JSON in and
+// broadcasts events out.
+//
+// Scaling/robustness model:
+//  - The SERVER owns the canvas: every stroke/fill/clear/undo is recorded in
+//    an authoritative op log. A client that joins (or reconnects) mid-round
+//    is sent the full op log and replays it, so many tabs never desync.
+//  - Players with too few to play, or who join mid-round, are spectators
+//    until the next round — they still see everything live.
 
 const WORDS = [
   'cat', 'house', 'tree', 'car', 'sun', 'fish', 'star', 'boat',
   'apple', 'flower', 'guitar', 'rocket', 'pizza', 'snake', 'cloud',
   'robot', 'ghost', 'crown', 'key', 'heart', 'moon', 'bridge',
+  'butterfly', 'mountain', 'umbrella', 'glasses', 'camera', 'anchor',
 ];
 
-const ROUND_MS = 70 * 1000;
+const ROUND_MS = 75 * 1000;
+const MAX_OPS = 5000; // bound the op log so memory can't grow unboundedly
 
 function pickWord(exclude) {
   let w;
@@ -24,17 +33,18 @@ function pickWord(exclude) {
 
 class DrawGame {
   constructor() {
-    this.players = new Map(); // id -> { id, name, score }
+    this.players = new Map(); // id -> { id, name, score, _spectating }
     this.order = []; // player ids, drawing rotation
     this.drawerIdx = -1;
     this.word = null;
+    this.round = 0;
     this.roundActive = false;
     this.roundEndsAt = 0;
     this.guessedThisRound = new Set();
+    this.ops = []; // authoritative canvas op log for the current round
     this._listeners = [];
   }
 
-  // Subscribe to broadcastable events: fn(event) where event = {type,...}.
   onBroadcast(fn) {
     this._listeners.push(fn);
   }
@@ -46,29 +56,52 @@ class DrawGame {
     return this.order[this.drawerIdx] || null;
   }
 
+  // ---- players ----
+
   addPlayer(id, name) {
     const clean = String(name || 'anon').slice(0, 16).trim() || 'anon';
-    this.players.set(id, { id, name: clean, score: 0 });
+    this.players.set(id, { id, name: clean, score: 0, _spectating: false });
+    // Joining mid-round => spectator until the next round starts.
+    this.players.get(id)._spectating = this.roundActive;
     this.order.push(id);
     this._emit({ type: 'players', players: this.publicPlayers() });
-    // First two players present -> start a round.
-    if (!this.roundActive && this.players.size >= 2) this.startRound();
-    else this._emit(this.stateFor(id));
+
+    if (!this.roundActive && this.players.size >= 2) {
+      this.startRound();
+    } else {
+      // Joined an in-progress (or idle) game: hand them a full snapshot so
+      // their canvas matches everyone else's immediately.
+      this._emit({ ...this.snapshotFor(id), _to: id });
+      if (this.roundActive) {
+        this._emit({
+          type: 'system',
+          text: `${clean} joined — watching this round, plays next.`,
+        });
+      }
+    }
     return this.players.get(id);
   }
 
   removePlayer(id) {
+    const p = this.players.get(id);
+    if (!p) return;
     this.players.delete(id);
     const wasDrawer = this.drawerId === id;
-    this.order = this.order.filter((p) => p !== id);
-    if (this.drawerIdx >= this.order.length) this.drawerIdx = 0;
+    const idx = this.order.indexOf(id);
+    this.order = this.order.filter((x) => x !== id);
+    // Keep the rotation pointer stable so we don't skip/replay a drawer.
+    if (idx !== -1 && idx <= this.drawerIdx) this.drawerIdx--;
     this._emit({ type: 'players', players: this.publicPlayers() });
+    this._emit({ type: 'system', text: `${p.name} left.` });
+
     if (this.players.size < 2) {
       this.roundActive = false;
       this.word = null;
       this._emit({ type: 'system', text: 'Waiting for 2+ players…' });
+      this._emit({ type: 'state', ...this._baseState(), youAreDrawer: false });
     } else if (wasDrawer && this.roundActive) {
-      this.startRound(); // drawer left mid-round -> new round
+      this._emit({ type: 'system', text: 'Drawer left — new round.' });
+      this.startRound();
     }
   }
 
@@ -78,41 +111,111 @@ class DrawGame {
       name: p.name,
       score: p.score,
       drawing: p.id === this.drawerId,
+      guessed: this.guessedThisRound.has(p.id),
+      spectating: !!p._spectating,
     }));
   }
 
-  // State tailored per recipient: only the drawer learns the word.
-  stateFor(id) {
+  // ---- state / snapshot ----
+
+  _baseState() {
     return {
-      type: 'state',
+      round: this.round,
       roundActive: this.roundActive,
       drawerId: this.drawerId,
       drawerName: this.drawerId
         ? (this.players.get(this.drawerId) || {}).name
         : null,
-      youAreDrawer: id === this.drawerId,
-      word: id === this.drawerId ? this.word : null,
       wordLength: this.word ? this.word.length : 0,
       endsAt: this.roundEndsAt,
       players: this.publicPlayers(),
     };
   }
 
+  stateFor(id) {
+    return {
+      type: 'state',
+      ...this._baseState(),
+      youAreDrawer: id === this.drawerId,
+      youAreSpectator: !!(this.players.get(id) || {})._spectating,
+      word: id === this.drawerId ? this.word : null,
+    };
+  }
+
+  // Everything a fresh/reconnecting client needs in one message: current
+  // state PLUS the full canvas op log to replay.
+  snapshotFor(id) {
+    return { ...this.stateFor(id), type: 'snapshot', ops: this.ops };
+  }
+
+  // ---- canvas ops (server-authoritative) ----
+
+  _recordOp(op) {
+    this.ops.push(op);
+    if (this.ops.length > MAX_OPS) this.ops.splice(0, this.ops.length - MAX_OPS);
+  }
+
+  // Called when the drawer sends a canvas action. Validated + recorded +
+  // broadcast to everyone else. Returns false if not allowed.
+  canvasOp(id, op) {
+    if (id !== this.drawerId || !this.roundActive) return false;
+    if (!op || typeof op !== 'object') return false;
+    const t = op.t;
+    if (t === 'stroke') {
+      const s = op.s || {};
+      const clean = {
+        t: 'stroke',
+        x0: +s.x0, y0: +s.y0, x1: +s.x1, y1: +s.y1,
+        c: typeof s.c === 'string' ? s.c.slice(0, 9) : '#111',
+        w: Math.min(60, Math.max(1, +s.w || 4)),
+        erase: !!s.erase,
+      };
+      if ([clean.x0, clean.y0, clean.x1, clean.y1].some(Number.isNaN)) return false;
+      this._recordOp(clean);
+      this._emit({ type: 'op', op: clean });
+    } else if (t === 'fill') {
+      const clean = {
+        t: 'fill',
+        c: typeof op.c === 'string' ? op.c.slice(0, 9) : '#111',
+      };
+      this._recordOp(clean);
+      this._emit({ type: 'op', op: clean });
+    } else if (t === 'undo') {
+      // Drop the last contiguous stroke-group / op the drawer made.
+      if (this.ops.length) {
+        this.ops.pop();
+        // Rebroadcast the whole log so every client rebuilds exactly.
+        this._emit({ type: 'replace', ops: this.ops });
+      }
+    } else if (t === 'clear') {
+      this.ops = [];
+      this._emit({ type: 'clear' });
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  // ---- rounds ----
+
   startRound() {
     if (this.players.size < 2) return;
+    this.round++;
     this.drawerIdx = (this.drawerIdx + 1) % this.order.length;
     this.word = pickWord(this.word);
     this.roundActive = true;
     this.roundEndsAt = Date.now() + ROUND_MS;
     this.guessedThisRound = new Set();
+    this.ops = [];
+    // Everyone present at round start can play this round (clear spectator).
+    for (const p of this.players.values()) p._spectating = false;
     this._emit({ type: 'clear' });
     this._emit({
       type: 'system',
-      text: `New round! ${
+      text: `Round ${this.round}! ${
         (this.players.get(this.drawerId) || {}).name
       } is drawing.`,
     });
-    // Each client gets its own state (drawer sees the word).
     for (const pid of this.players.keys()) {
       this._emit({ ...this.stateFor(pid), _to: pid });
     }
@@ -126,29 +229,30 @@ class DrawGame {
       type: 'system',
       text:
         reason === 'time'
-          ? `Time! The word was "${revealed}".`
-          : `Round over. The word was "${revealed}".`,
+          ? `⏰ Time! The word was "${revealed}".`
+          : `✓ Round over — the word was "${revealed}".`,
     });
+    this._emit({ type: 'reveal', word: revealed });
     this._emit({ type: 'players', players: this.publicPlayers() });
   }
 
-  // A non-drawer submits a guess. Returns the outcome for the caller.
+  // ---- guessing ----
+
   guess(id, text) {
     const player = this.players.get(id);
     if (!player) return { ok: false };
-    const guess = String(text || '').trim();
+    const guess = String(text || '').trim().slice(0, 60);
     if (!guess) return { ok: false };
 
-    // Drawer can't guess; nobody guesses outside an active round.
-    if (!this.roundActive || id === this.drawerId) {
-      this._emit({ type: 'chat', name: player.name, text: guess });
-      return { ok: true, correct: false };
-    }
+    const isDrawer = id === this.drawerId;
+    const canScore =
+      this.roundActive &&
+      !isDrawer &&
+      !player._spectating &&
+      !this.guessedThisRound.has(id);
 
-    if (guess.toLowerCase() === this.word.toLowerCase()) {
-      if (this.guessedThisRound.has(id)) return { ok: true, correct: true };
+    if (canScore && guess.toLowerCase() === this.word.toLowerCase()) {
       this.guessedThisRound.add(id);
-      // Faster correct guesses score more; drawer also earns a point.
       const remaining = Math.max(0, this.roundEndsAt - Date.now());
       const points = 100 + Math.round((remaining / ROUND_MS) * 100);
       player.score += points;
@@ -156,31 +260,49 @@ class DrawGame {
       if (drawer) drawer.score += 50;
       this._emit({
         type: 'system',
-        text: `${player.name} guessed it! (+${points})`,
+        text: `🎉 ${player.name} guessed it! (+${points})`,
       });
+      this._emit({ type: 'correct', id, name: player.name });
       this._emit({ type: 'players', players: this.publicPlayers() });
 
-      // Everyone (except drawer) guessed -> end early.
-      const guessers = this.players.size - 1;
-      if (this.guessedThisRound.size >= guessers) {
+      const guessers = [...this.players.keys()].filter(
+        (pid) => pid !== this.drawerId
+      ).length;
+      if (this.guessedThisRound.size >= guessers && guessers > 0) {
         this.endRound('all');
-        setTimeout(() => this.startRound(), 2500);
+        setTimeout(() => this.startRound(), 3000);
       }
       return { ok: true, correct: true };
     }
 
-    // Wrong guess -> shows in chat for everyone.
+    // "So close" feedback: same length + shares >60% letters.
+    if (canScore && near(guess, this.word)) {
+      this._emit({ type: 'chat', name: player.name, text: guess });
+      this._emit({ type: 'system', text: `${player.name} is very close…`, _to: id });
+      return { ok: true, correct: false, close: true };
+    }
+
+    // Plain chat (wrong guess, drawer chatting, or already-guessed player).
     this._emit({ type: 'chat', name: player.name, text: guess });
     return { ok: true, correct: false };
   }
 
-  // Called by a periodic ticker (server) to enforce the time limit.
   tick() {
     if (this.roundActive && Date.now() >= this.roundEndsAt) {
       this.endRound('time');
-      setTimeout(() => this.startRound(), 2500);
+      setTimeout(() => this.startRound(), 3000);
     }
   }
+}
+
+// Cheap similarity: same length and majority of positions match.
+function near(a, b) {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+  if (a.length !== b.length || a === b) return false;
+  let same = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
+  return same / b.length >= 0.6;
 }
 
 module.exports = { DrawGame, WORDS, ROUND_MS };
