@@ -378,6 +378,57 @@ async function main() {
     'accept key mismatch'
   );
 
+  // --- Creative feature: Draw & Guess game logic ---
+  {
+    const { DrawGame } = require('../src/draw-game');
+    const g = new DrawGame();
+    const events = [];
+    g.onBroadcast((e) => events.push(e));
+
+    g.addPlayer('a', 'Alice');
+    g.addPlayer('b', 'Bob'); // 2 players -> a round auto-starts
+    const drawer = g.drawerId;
+    const guesser = drawer === 'a' ? 'b' : 'a';
+
+    ok(
+      'game: round starts with a word + a drawer at 2 players',
+      g.roundActive === true &&
+        typeof g.word === 'string' &&
+        g.word.length > 0 &&
+        (drawer === 'a' || drawer === 'b'),
+      `drawer=${drawer} word=${g.word}`
+    );
+
+    // Wrong guess: no score, shown as chat.
+    const before = g.players.get(guesser).score;
+    g.guess(guesser, 'definitely-not-the-word');
+    ok(
+      'game: wrong guess scores nothing',
+      g.players.get(guesser).score === before,
+      `score=${g.players.get(guesser).score}`
+    );
+
+    // Correct guess: guesser scores, drawer gets points, round ends.
+    g.guess(guesser, g.word);
+    const guesserScore = g.players.get(guesser).score;
+    const drawerScore = g.players.get(drawer).score;
+    ok(
+      'game: correct guess scores guesser + drawer and ends round',
+      guesserScore > 0 && drawerScore === 50 && g.roundActive === false,
+      `guesser=${guesserScore} drawer=${drawerScore} active=${g.roundActive}`
+    );
+
+    // Drawer's word is hidden from the guesser in per-player state.
+    g.startRound();
+    const sDrawer = g.stateFor(g.drawerId);
+    const sOther = g.stateFor(g.drawerId === 'a' ? 'b' : 'a');
+    ok(
+      'game: only the drawer is told the word',
+      typeof sDrawer.word === 'string' && sOther.word === null,
+      `drawer.word=${sDrawer.word} other.word=${sOther.word}`
+    );
+  }
+
   server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed === 0 ? 0 : 1);

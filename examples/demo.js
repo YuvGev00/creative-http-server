@@ -64,13 +64,67 @@ app.ws('/chat', (conn) => {
   conn.on('close', () => chatClients.delete(conn));
 });
 
+// --- Creative feature: multiplayer Draw & Guess game ---
+const { DrawGame } = require('../src/draw-game');
+const game = new DrawGame();
+const gameConns = new Map(); // playerId -> conn
+let nextId = 1;
+
+// Broadcast helper: events with a `_to` go to one player; others to all.
+game.onBroadcast((event) => {
+  const { _to, ...payload } = event;
+  const msg = JSON.stringify(payload);
+  if (_to) {
+    const c = gameConns.get(_to);
+    if (c) c.send(msg);
+  } else {
+    for (const c of gameConns.values()) c.send(msg);
+  }
+});
+setInterval(() => game.tick(), 1000);
+
+app.ws('/game', (conn) => {
+  const id = 'p' + nextId++;
+  gameConns.set(id, conn);
+  let joined = false;
+
+  conn.on('message', (raw) => {
+    let m;
+    try { m = JSON.parse(raw); } catch { return; }
+
+    if (m.type === 'join') {
+      joined = true;
+      game.addPlayer(id, m.name);
+      conn.send(JSON.stringify(game.stateFor(id)));
+    } else if (!joined) {
+      return;
+    } else if (m.type === 'stroke' && id === game.drawerId) {
+      // Relay drawing strokes to everyone else (drawer is authoritative).
+      for (const [pid, c] of gameConns) {
+        if (pid !== id) c.send(JSON.stringify({ type: 'stroke', s: m.s }));
+      }
+    } else if (m.type === 'clear' && id === game.drawerId) {
+      for (const c of gameConns.values())
+        c.send(JSON.stringify({ type: 'clear' }));
+    } else if (m.type === 'guess') {
+      game.guess(id, m.text);
+    }
+  });
+
+  conn.on('close', () => {
+    gameConns.delete(id);
+    if (joined) game.removePlayer(id);
+  });
+});
+
 // --- Required feature 2: static file serving ---
 app.static(path.join(__dirname, 'public'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n  ⚒  Forge demo running on http://localhost:${PORT}`);
-  console.log(`     API docs:       http://localhost:${PORT}/_routes`);
+  console.log(`     API docs:        http://localhost:${PORT}/_routes`);
   console.log(`     Flight recorder: http://localhost:${PORT}/_trace`);
-  console.log(`     WebSocket chat:  http://localhost:${PORT}/chat.html\n`);
+  console.log(`     WebSocket chat:  http://localhost:${PORT}/chat.html`);
+  console.log(`     Draw & Guess:    http://localhost:${PORT}/game.html\n`);
 });

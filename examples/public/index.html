@@ -9,10 +9,41 @@
 <body>
   <main>
     <img src="/logo.svg" alt="Forge logo" width="96" height="96">
-    <h1>It works.</h1>
-    <p>This page is served as a static file by <strong>Forge</strong>,
-       an HTTP/1.1 framework built only on Node's <code>net</code> module.</p>
-    <p><a href="/_routes">Browse the live API reference →</a></p>
+    <h1>⚒ Forge</h1>
+    <p>An HTTP/1.1 framework built from scratch on Node's
+       <code>net</code> module. This page is served as a static file by
+       Forge itself.</p>
+    <div class="links">
+      <a class="card" href="/game.html">
+        <strong>🎨 Draw &amp; Guess</strong>
+        <span>Multiplayer Pictionary — open in 2 tabs and play</span>
+      </a>
+      <a class="card" href="/chat.html">
+        <strong>💬 Live Chat</strong>
+        <span>Real-time chat over a hand-rolled WebSocket</span>
+      </a>
+      <a class="card" href="/_routes">
+        <strong>📖 API Reference</strong>
+        <span>Auto-generated from the registered routes</span>
+      </a>
+      <a class="card" href="/_trace">
+        <strong>📊 Flight Recorder</strong>
+        <span>Live timeline of recent requests</span>
+      </a>
+    </div>
   </main>
+  <style>
+    main { max-width: 640px; }
+    .links { display:grid; grid-template-columns:1fr 1fr; gap:1rem;
+      margin-top:1.5rem; }
+    @media (max-width:560px){ .links{ grid-template-columns:1fr; } }
+    .card { display:flex; flex-direction:column; gap:.3rem; text-align:left;
+      background:#161b22; border:1px solid #21262d; border-radius:12px;
+      padding:1rem 1.2rem; text-decoration:none; color:#e6edf3;
+      transition:border-color .15s, transform .15s; }
+    .card:hover { border-color:#4c9aff; transform:translateY(-2px); }
+    .card strong { font-size:1.05rem; }
+    .card span { color:#9aa6b2; font-size:.88rem; }
+  </style>
 </body>
 </html>

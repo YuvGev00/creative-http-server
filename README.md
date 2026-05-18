@@ -14,16 +14,17 @@ node examples/demo.js      # or: npm start
 # → http://localhost:3000
 # → http://localhost:3000/_routes   (live API reference)
 
-node test/smoke.js         # or: npm test  (26 assertions, raw-socket driven)
+node test/smoke.js         # or: npm test  (30 assertions, raw-socket driven)
 ```
 
 ## API design choices
 
 I chose an **Express-flavoured, chainable core** so the framework is instantly
-familiar and easy to evaluate against the requirements, then added **three
+familiar and easy to evaluate against the requirements, then added **four
 cohesive creative features** that build naturally on top of it: typed routes
-with auto-validation + live docs, a request Flight Recorder, and hand-rolled
-WebSockets — all on the same raw `net` sockets.
+with auto-validation + live docs, a request Flight Recorder, hand-rolled
+WebSockets, and a multiplayer Draw &amp; Guess game — all on the same raw
+`net` sockets.
 
 ### Core API
 
@@ -121,6 +122,18 @@ app.ws('/chat', (conn) => {
 });
 ```
 
+### Creative feature 4 — Multiplayer Draw &amp; Guess game
+
+A full real-time **Pictionary** built on the WebSocket layer: players join,
+the server picks a secret word and a drawer, the drawer paints on a canvas
+(strokes broadcast live to everyone), others race to guess in chat. Correct
+guesses score by speed, the drawer earns points too, rounds rotate the drawer
+and run on a timer. The word is sent **only to the drawer** — the server
+tailors per-player state so guessers never see it. Game rules live in
+`src/draw-game.js` as transport-agnostic logic (unit-tested directly); the
+demo's `/game` WebSocket route just relays messages. Open `/game.html` in two
+tabs (or share with a friend) to play.
+
 ## How it works under the hood
 
 1. **TCP, not HTTP.** `net.createServer` gives raw sockets. A single `'data'`
@@ -153,21 +166,23 @@ src/docs.js         Live /_routes reference renderer (creative 1)
 src/recorder.js     Request Flight Recorder ring buffer (creative 2)
 src/trace-view.js   Live /_trace timeline renderer   (creative 2)
 src/websocket.js    RFC 6455 handshake + frame codec (creative 3)
-examples/demo.js    Wires every feature together (incl. /chat WebSocket)
-test/smoke.js       26 raw-socket assertions, exits non-zero on failure
+src/draw-game.js    Draw & Guess game rules (transport-agnostic, creative 4)
+examples/demo.js    Wires every feature (incl. /chat + /game WebSockets)
+test/smoke.js       30 raw-socket assertions, exits non-zero on failure
 ```
 
 ## Verification
 
 `npm test` boots the framework on an ephemeral port and drives it with a raw
-`net` client (26 assertions), covering: JSON routes, path params,
+`net` client (30 assertions), covering: JSON routes, path params,
 valid/invalid typed-route validation, static MIME, traversal blocking, the
 live docs (HTML + JSON), a split-across-TCP-chunks request, 404 handling,
 hardening cases — malformed/conflicting `Content-Length`, rejected chunked
 encoding, wildcard routes, `HEAD` no-body, CRLF header-injection, `send()`
 with an object, double-`next()`, NUL-byte paths, oversized-body `413` — plus
-the creative features: the Flight Recorder timeline, and a full WebSocket
-handshake + masked-frame round-trip checked against the RFC 6455 test vector.
+the creative features: the Flight Recorder timeline, a full WebSocket
+handshake + masked-frame round-trip checked against the RFC 6455 test vector,
+and Draw &amp; Guess game rules (round start, scoring, word-secrecy).
 
 ## Possible extensions (out of scope here)
 
