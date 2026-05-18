@@ -51,6 +51,10 @@ function decodeFrames(buf) {
       // Node Buffer can't safely read full 64-bit; assume < 2^53.
       len = Number(buf.readBigUInt64BE(p));
       p += 8;
+      if (len > 10 * 1024 * 1024) {
+        // Oversized frame: stop decoding, return what we have so far.
+        return { frames, rest: buf.slice(offset) };
+      }
     }
 
     let maskKey;
