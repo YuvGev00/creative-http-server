@@ -6,14 +6,19 @@
 
 function compilePath(pattern) {
   const paramNames = [];
+  // Escape every regex metacharacter EXCEPT ':' and '*', which are our own
+  // pattern syntax, then translate those two into capture groups. The earlier
+  // version forgot to escape '*', so it never became a wildcard at all.
   let regexStr = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex specials
+    .replace(/[.+^${}()|[\]\\?]/g, '\\$&')
     .replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => {
       paramNames.push(name);
       return '([^/]+)';
     })
-    .replace(/\\\*/g, '(.*)'); // wildcard (the \* is from the escape pass)
-  if (pattern.includes('*')) paramNames.push('wildcard');
+    .replace(/\*/g, () => {
+      paramNames.push('wildcard');
+      return '(.*)';
+    });
   return { regex: new RegExp(`^${regexStr}/?$`), paramNames };
 }
 

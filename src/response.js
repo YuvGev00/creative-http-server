@@ -25,9 +25,14 @@ const STATUS_TEXT = {
   503: 'Service Unavailable',
 };
 
+// Per RFC 7230/7231 these never carry a message body.
+const BODYLESS_STATUS = new Set([204, 304]);
+
 class Response {
-  constructor(socket) {
+  constructor(socket, method = 'GET') {
     this.socket = socket;
+    // HEAD must return identical headers to GET but no body.
+    this.method = String(method).toUpperCase();
     this.statusCode = 200;
     this.headers = {};
     this.sent = false;
@@ -44,12 +49,25 @@ class Response {
     if (this._resolveDone) this._resolveDone();
   }
 
+  // True when the response must omit its body (HEAD request, or a status
+  // that is defined to never have one). Content-Length headers are still
+  // sent so HEAD mirrors the equivalent GET.
+  _bodySuppressed() {
+    return this.method === 'HEAD' || BODYLESS_STATUS.has(this.statusCode);
+  }
+
   status(code) {
     this.statusCode = code;
     return this;
   }
 
   set(key, value) {
+    // Reject CR/LF in header name or value — otherwise a caller passing
+    // attacker-controlled data could inject extra headers or split the
+    // response (CRLF / response-splitting).
+    if (/[\r\n]/.test(String(key)) || /[\r\n]/.test(String(value))) {
+      throw new Error('Invalid characters (CR/LF) in header');
+    }
     this.headers[key] = value;
     return this;
   }
@@ -77,6 +95,8 @@ class Response {
     }
 
     for (const [k, v] of Object.entries(this.headers)) {
+      // Final safety net: never emit a header containing CR/LF.
+      if (/[\r\n]/.test(String(k)) || /[\r\n]/.test(String(v))) continue;
       head += `${k}: ${v}\r\n`;
     }
     head += '\r\n';
@@ -105,9 +125,12 @@ class Response {
       }
     }
 
-    const head = this._writeHead(bodyBuf.length);
+    // HEAD mirrors GET's headers (incl. Content-Length) but sends no body.
+    // 204/304 carry neither a body nor a Content-Length.
+    const bodyless = BODYLESS_STATUS.has(this.statusCode);
+    const head = this._writeHead(bodyless ? null : bodyBuf.length);
     this.socket.write(head);
-    if (bodyBuf.length) this.socket.write(bodyBuf);
+    if (!this._bodySuppressed() && bodyBuf.length) this.socket.write(bodyBuf);
     this.socket.end();
     return this;
   }
@@ -117,9 +140,10 @@ class Response {
     const body = Buffer.from(JSON.stringify(data, null, 2), 'utf8');
     this.headers['Content-Type'] = 'application/json; charset=utf-8';
     this._markSent();
-    const head = this._writeHead(body.length);
+    const bodyless = BODYLESS_STATUS.has(this.statusCode);
+    const head = this._writeHead(bodyless ? null : body.length);
     this.socket.write(head);
-    this.socket.write(body);
+    if (!this._bodySuppressed()) this.socket.write(body);
     this.socket.end();
     return this;
   }
@@ -127,7 +151,7 @@ class Response {
   redirect(location, code = 302) {
     if (this.sent) return this;
     this.statusCode = code;
-    this.headers['Location'] = location;
+    this.set('Location', location); // CR/LF-guarded
     return this.send('');
   }
 
@@ -146,6 +170,11 @@ class Response {
       }
       const head = this._writeHead(stats.size);
       this.socket.write(head);
+      // HEAD: same headers (incl. Content-Length) as GET, but no body.
+      if (this.method === 'HEAD') {
+        this.socket.end();
+        return;
+      }
       const stream = fs.createReadStream(filePath);
       stream.pipe(this.socket);
       stream.on('error', () => this.socket.destroy());

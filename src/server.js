@@ -129,7 +129,7 @@ class App {
           buffer = buffer.slice(result.bytesConsumed);
 
           const req = new Request(result.request, socket);
-          const res = new Response(socket);
+          const res = new Response(socket, req.method);
 
           try {
             await this.router.dispatch(req, res);

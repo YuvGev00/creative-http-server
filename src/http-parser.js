@@ -31,20 +31,42 @@ function extractRequest(buffer) {
   const [method, rawTarget, version] = parts;
 
   const headers = {};
+  const contentLengths = []; // track every Content-Length seen, raw
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     const colon = line.indexOf(':');
     if (colon <= 0) continue;
     const key = line.slice(0, colon).toLowerCase().trim();
     const value = line.slice(colon + 1).trim();
+    if (key === 'content-length') contentLengths.push(value);
     headers[key] = key in headers ? `${headers[key]}, ${value}` : value;
   }
 
-  const bodyStart = headerEnd + HEADER_TERMINATOR.length;
-  const contentLength = parseInt(headers['content-length'], 10) || 0;
+  // We do not implement chunked decoding; mis-framing a chunked body as a
+  // zero-length one is a request-smuggling hazard, so reject it explicitly.
+  const te = (headers['transfer-encoding'] || '').toLowerCase();
+  if (te.includes('chunked')) {
+    return { error: 'Transfer-Encoding: chunked is not supported' };
+  }
 
-  if (contentLength < 0 || Number.isNaN(contentLength)) {
-    return { error: 'Invalid Content-Length' };
+  const bodyStart = headerEnd + HEADER_TERMINATOR.length;
+
+  let contentLength = 0;
+  if (contentLengths.length > 0) {
+    // Conflicting duplicate Content-Length headers => smuggling risk.
+    const unique = new Set(contentLengths.map((v) => v.trim()));
+    if (unique.size > 1) {
+      return { error: 'Conflicting Content-Length headers' };
+    }
+    const raw = contentLengths[0].trim();
+    // Must be a bare non-negative integer — reject "5junk", "", "-1", "0x5".
+    if (!/^\d+$/.test(raw)) {
+      return { error: 'Invalid Content-Length' };
+    }
+    contentLength = Number(raw);
+    if (!Number.isSafeInteger(contentLength)) {
+      return { error: 'Invalid Content-Length' };
+    }
   }
 
   // Wait until the full declared body has arrived.

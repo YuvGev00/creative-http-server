@@ -67,6 +67,16 @@ function post(p, body) {
     `Content-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`
   );
 }
+function head(p) {
+  return `HEAD ${p} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`;
+}
+// Raw POST where we control the exact Content-Length header text.
+function postRaw(p, clHeaderValue, body) {
+  return (
+    `POST ${p} HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n` +
+    `Content-Length: ${clHeaderValue}\r\nConnection: close\r\n\r\n${body}`
+  );
+}
 
 async function main() {
   const app = forge();
@@ -81,6 +91,9 @@ async function main() {
     },
     handler: (req, res) => res.status(201).json({ ok: true, name: req.body.name }),
   });
+  app.get('/files/*', (req, res) =>
+    res.json({ wildcard: req.params.wildcard })
+  );
   app.static(path.join(__dirname, '..', 'examples', 'public'));
 
   const server = app.listen(0);
@@ -137,6 +150,61 @@ async function main() {
   // 9. 404 for unknown route
   r = await rawRequest(port, [get('/nope')]);
   ok('unknown route -> 404', r.status === 404);
+
+  // --- Regression tests for issues found in the Codex review ---
+
+  // 10. Malformed Content-Length ("5junk") must be rejected, not accepted.
+  r = await rawRequest(port, [postRaw('/api/users', '5junk', 'hello')]);
+  ok('bad Content-Length "5junk" -> 400', r.status === 400, `got ${r.status}`);
+
+  // 11. Conflicting duplicate Content-Length must be rejected (smuggling).
+  const dup =
+    'POST /api/users HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n' +
+    'Content-Length: 5\r\nContent-Length: 6\r\nConnection: close\r\n\r\nhello!';
+  r = await rawRequest(port, [dup]);
+  ok('conflicting Content-Length -> 400', r.status === 400, `got ${r.status}`);
+
+  // 12. Transfer-Encoding: chunked must be rejected, not mis-framed.
+  const chunked =
+    'POST /api/users HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n' +
+    'Connection: close\r\n\r\n0\r\n\r\n';
+  r = await rawRequest(port, [chunked]);
+  ok('chunked request -> 400', r.status === 400, `got ${r.status}`);
+
+  // 13. Wildcard route now actually matches (was silently broken).
+  r = await rawRequest(port, [get('/files/a/b.txt')]);
+  ok(
+    'wildcard /files/* matches nested path',
+    r.status === 200 && JSON.parse(r.body).wildcard === 'a/b.txt',
+    `got ${r.status} ${r.body}`
+  );
+
+  // 14. HEAD returns headers (incl. Content-Length) but NO body.
+  r = await rawRequest(port, [head('/style.css')]);
+  ok(
+    'HEAD /style.css -> 200, Content-Length set, empty body',
+    r.status === 200 &&
+      r.headers['content-length'] &&
+      Number(r.headers['content-length']) > 0 &&
+      r.body.length === 0,
+    `status ${r.status} bodylen ${r.body.length}`
+  );
+
+  // 15. CR/LF in a header value is rejected (response-splitting guard).
+  app.get('/inject', (req, res) => {
+    try {
+      res.set('X-Evil', 'a\r\nX-Injected: yes');
+      res.json({ injected: false });
+    } catch {
+      res.status(500).json({ blocked: true });
+    }
+  });
+  r = await rawRequest(port, [get('/inject')]);
+  ok(
+    'CRLF header injection blocked',
+    !r.headers['x-injected'] && r.status === 500,
+    `injected header present? ${!!r.headers['x-injected']}`
+  );
 
   server.close();
   console.log(`\n${passed} passed, ${failed} failed`);
