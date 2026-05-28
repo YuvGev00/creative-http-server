@@ -130,19 +130,72 @@ function postRaw(p, clHeaderValue, body) {
     `Content-Length: ${clHeaderValue}\r\nConnection: close\r\n\r\n${body}`
   );
 }
+// Any method with an optional JSON body (PUT / PATCH / DELETE / …).
+function req(method, p, body) {
+  if (body === undefined) {
+    return `${method} ${p} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`;
+  }
+  return (
+    `${method} ${p} HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n` +
+    `Content-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`
+  );
+}
 
 async function main() {
   const app = forge();
   app.get('/api/hello', (req, res) => res.json({ message: 'hi' }));
-  app.get('/api/users/:id', (req, res) => res.json({ id: req.params.id }));
+
+  // Store-backed CRUD resource (mirrors the demo) so the suite exercises
+  // every verb the framework supports against real state.
+  const users = [{ id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' }];
+  let nextUserId = 2;
+  const findUser = (id) => users.find((u) => String(u.id) === String(id));
+  const userBody = {
+    name: { type: 'string', required: true, min: 2 },
+    email: { type: 'string', required: true, pattern: /^[^@]+@[^@]+$/ },
+    role: { type: 'string', enum: ['admin', 'member'] },
+  };
+
+  app.get('/api/users', (req, res) => res.json(users));
+  app.get('/api/users/:id', (req, res) => {
+    const u = findUser(req.params.id);
+    if (!u) return res.status(404).json({ error: 'not found' });
+    res.json(u);
+  });
   app.route({
     method: 'POST',
     path: '/api/users',
-    body: {
-      name: { type: 'string', required: true, min: 2 },
-      email: { type: 'string', required: true, pattern: /^[^@]+@[^@]+$/ },
+    body: userBody,
+    handler: (req, res) => {
+      const u = { id: nextUserId++, name: req.body.name, email: req.body.email, role: req.body.role || 'member' };
+      users.push(u);
+      res.status(201).json({ ok: true, user: u });
     },
-    handler: (req, res) => res.status(201).json({ ok: true, name: req.body.name }),
+  });
+  app.route({
+    method: 'PUT',
+    path: '/api/users/:id',
+    body: userBody,
+    handler: (req, res) => {
+      const u = findUser(req.params.id);
+      if (!u) return res.status(404).json({ error: 'not found' });
+      u.name = req.body.name; u.email = req.body.email; u.role = req.body.role || 'member';
+      res.json({ user: u });
+    },
+  });
+  app.patch('/api/users/:id', (req, res) => {
+    const u = findUser(req.params.id);
+    if (!u) return res.status(404).json({ error: 'not found' });
+    const b = req.body || {};
+    if (b.name !== undefined) u.name = b.name;
+    if (b.email !== undefined) u.email = b.email;
+    if (b.role !== undefined) u.role = b.role;
+    res.json({ user: u });
+  });
+  app.delete('/api/users/:id', (req, res) => {
+    const i = users.findIndex((u) => String(u.id) === String(req.params.id));
+    if (i === -1) return res.status(404).json({ error: 'not found' });
+    res.json({ deleted: true, user: users.splice(i, 1)[0] });
   });
   app.get('/files/*', (req, res) =>
     res.json({ wildcard: req.params.wildcard })
@@ -170,9 +223,13 @@ async function main() {
   let r = await rawRequest(port, [get('/api/hello')]);
   ok('GET /api/hello -> 200 JSON', r.status === 200 && JSON.parse(r.body).message === 'hi');
 
-  // 2. Path params
-  r = await rawRequest(port, [get('/api/users/42')]);
-  ok('GET /api/users/:id captures param', r.status === 200 && JSON.parse(r.body).id === '42');
+  // 2. Path params (id 1 is the seeded user)
+  r = await rawRequest(port, [get('/api/users/1')]);
+  ok('GET /api/users/:id captures param + reads store', r.status === 200 && JSON.parse(r.body).id === 1);
+
+  // 2b. GET missing id -> 404 from the real store
+  r = await rawRequest(port, [get('/api/users/9999')]);
+  ok('GET /api/users/:id unknown -> 404', r.status === 404, `got ${r.status}`);
 
   // 3. Valid POST passes validation
   r = await rawRequest(port, [post('/api/users', '{"name":"Al","email":"a@b.c"}')]);
@@ -186,6 +243,26 @@ async function main() {
     r.status === 400 && Array.isArray(errBody.details) && errBody.details.length >= 1,
     `got ${r.status}`
   );
+
+  // 4b. Full CRUD round-trip: create -> PUT -> PATCH -> DELETE -> gone.
+  r = await rawRequest(port, [post('/api/users', '{"name":"Crud","email":"c@r.ud"}')]);
+  const newId = JSON.parse(r.body).user.id;
+  r = await rawRequest(port, [req('PUT', `/api/users/${newId}`, '{"name":"Replaced","email":"r@p.co","role":"admin"}')]);
+  ok('PUT /api/users/:id replaces', r.status === 200 && JSON.parse(r.body).user.role === 'admin', `got ${r.status}`);
+  r = await rawRequest(port, [req('PATCH', `/api/users/${newId}`, '{"name":"Patched"}')]);
+  ok('PATCH /api/users/:id partial update', r.status === 200 && JSON.parse(r.body).user.name === 'Patched' && JSON.parse(r.body).user.email === 'r@p.co', `got ${r.status}`);
+  r = await rawRequest(port, [req('DELETE', `/api/users/${newId}`)]);
+  ok('DELETE /api/users/:id removes', r.status === 200 && JSON.parse(r.body).deleted === true, `got ${r.status}`);
+  r = await rawRequest(port, [get(`/api/users/${newId}`)]);
+  ok('GET after DELETE -> 404', r.status === 404, `got ${r.status}`);
+
+  // 4c. PUT with invalid body still rejected by the validator.
+  r = await rawRequest(port, [req('PUT', '/api/users/1', '{"name":"x"}')]);
+  ok('PUT invalid body -> 400', r.status === 400, `got ${r.status}`);
+
+  // 4d. PUT/DELETE on a missing id -> 404.
+  r = await rawRequest(port, [req('DELETE', '/api/users/9999')]);
+  ok('DELETE unknown id -> 404', r.status === 404, `got ${r.status}`);
 
   // 5. Static file with correct MIME
   r = await rawRequest(port, [get('/loom.css')]);

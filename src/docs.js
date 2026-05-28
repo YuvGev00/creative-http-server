@@ -90,36 +90,43 @@ function hiResp(src) {
 }
 
 // ─── per-route example builders (mirrors the demo) ─────────────────────
+function exampleBody(bodySchema) {
+  const example = {};
+  for (const [k, v] of Object.entries(bodySchema)) {
+    if (v.type === 'string') {
+      if (k === 'email') example[k] = 'a@b.co';
+      else if (v.enum) example[k] = v.enum[0];
+      else example[k] = (v.min || 0) >= 2 ? 'sample' : 'x';
+    } else if (v.type === 'number') example[k] = v.min || 1;
+    else if (v.type === 'boolean') example[k] = true;
+  }
+  return example;
+}
+
 function curlFor(r) {
   const url = ':3000' + r.path.replace(/:(\w+)/g, (_, k) =>
     ({ id: '42' }[k] || ('{' + k + '}')));
   if (r.method === 'GET') return 'curl ' + url;
-  if (r.method === 'POST') {
-    if (r.bodySchema) {
-      const example = {};
-      for (const [k, v] of Object.entries(r.bodySchema)) {
-        if (v.type === 'string') {
-          if (k === 'email') example[k] = 'a@b.co';
-          else example[k] = (v.min || 0) >= 2 ? 'sample' : 'x';
-        } else if (v.type === 'number') example[k] = v.min || 1;
-        else if (v.type === 'boolean') example[k] = true;
-      }
-      return 'curl -X POST ' + url + " \\\n" +
-             "  -H 'Content-Type: application/json' \\\n" +
-             "  -d '" + JSON.stringify(example) + "'";
-    }
-    return 'curl -X POST ' + url + " -d '{}'";
-  }
-  return '# ' + r.method + ' ' + r.path;
+  if (r.method === 'DELETE') return 'curl -X DELETE ' + url;
+
+  // POST / PUT / PATCH — send a JSON body.
+  const body = r.bodySchema
+    ? exampleBody(r.bodySchema)
+    : (r.method === 'PATCH' ? { name: 'new name' } : {});
+  return 'curl -X ' + r.method + ' ' + url + " \\\n" +
+         "  -H 'Content-Type: application/json' \\\n" +
+         "  -d '" + JSON.stringify(body) + "'";
 }
 
 function respFor(r) {
   if (r.method === 'POST' && r.bodySchema) {
-    return 'HTTP/1.1 201 Created\n' +
-           '{ "created": true }';
+    return 'HTTP/1.1 201 Created\n{ "created": true, "user": { "id": 2, … } }';
   }
+  if (r.method === 'PUT')    return '{ "updated": true, "user": { "id": 42, … } }';
+  if (r.method === 'PATCH')  return '{ "patched": true, "user": { "id": 42, … } }';
+  if (r.method === 'DELETE') return '{ "deleted": true, "user": { "id": 42, … } }';
   if (/users\/:id$/.test(r.path)) {
-    return '{ "id": "42", "name": "User 42" }';
+    return '{ "id": 42, "name": "Alice", "email": "alice@example.com" }';
   }
   if (r.path === '/api/hello') return '{ "message": "Hello, World!", "from": "loom" }';
   if (r.path === '/api/users') return '[ { "id": 1, "name": "Alice", "email": "alice@example.com" } ]';
@@ -127,8 +134,10 @@ function respFor(r) {
   return '';
 }
 
+// Any validated write route (typed app.route with a body schema) can return a
+// structured 400, so show the failure shape for all of them — not just POST.
 function failFor(r) {
-  if (r.method !== 'POST' || !r.bodySchema) return '';
+  if (!r.bodySchema) return '';
   return 'HTTP/1.1 400 Bad Request\n' +
          '{ "error": "Validation failed",\n' +
          '  "details": [{ "field": "email", "message": "pattern" }] }';
