@@ -44,24 +44,16 @@ function fmtMs(ms) {
   return n.toFixed(1).replace(/\.0$/, '');
 }
 
-function pickTicks(total) {
-  // 2–3 evenly-spaced ticks across the bar, never the leading 0 (it sits at
-  // the very left edge and gets clipped by the translateX(-50%) centering).
-  if (total <= 0) return [];
-  return [total / 2, total];
-}
-
 function renderRow(e) {
   const total = (e.steps || []).reduce((a, s) => a + (s.ms || 0), 0) || 1;
-  const ticks = pickTicks(total);
   const segs = (e.steps || []).map((s) =>
     `<span class="seg ${stepClass(s.name, e.validation)}" title="${esc(s.name)} — ${fmtMs(s.ms)} ms" style="flex-basis:${Math.max(1, (s.ms / total) * 100)}%"></span>`
   ).join('');
+  // Per-step breakdown shows the share as a percentage of the total, not yet
+  // another absolute ms figure — the total (right of the row) is the single
+  // source of truth for time, so a row reads as: total ms + how it split.
   const legend = (e.steps || []).map((s) =>
-    `<span>${esc(s.name)} <b>${fmtMs(s.ms)}ms</b></span>`
-  ).join('');
-  const axis = ticks.map((t) =>
-    `<i style="left:${(t / total) * 100}%"></i><span style="left:${(t / total) * 100}%">${fmtMs(t)}ms</span>`
+    `<span>${esc(s.name)} <b>${Math.round((s.ms / total) * 100)}%</b></span>`
   ).join('');
 
   return (
@@ -75,7 +67,6 @@ function renderRow(e) {
         `<span class="ts">${esc(e.time)}</span>` +
       '</div>' +
       `<div class="bar">${segs}</div>` +
-      `<div class="axis">${axis}</div>` +
       `<div class="legend">${legend}</div>` +
     '</div>'
   );

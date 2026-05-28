@@ -717,13 +717,7 @@ html[data-theme="dark"] .lm-hero { background-blend-mode: lighten; }
 .lm-trace-row .ms { font-variant-numeric: tabular-nums; font-weight: 700; }
 .lm-trace-row .b { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .lm-trace-row .ts { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
-.lm-trace-row .axis {
-  position: relative; height: 18px;
-  border-top: 1px solid var(--rule); margin: 2px 0 4px;
-}
-.lm-trace-row .axis i { position: absolute; top: 0; width: 1px; height: 5px; background: var(--rule-2); }
-.lm-trace-row .axis span { position: absolute; top: 6px; font-size: 9px; color: var(--muted); transform: translateX(-50%); letter-spacing: 0; }
-.lm-trace-row .bar { display: flex; height: 8px; gap: 1px; padding-bottom: 8px; }
+.lm-trace-row .bar { display: flex; height: 8px; gap: 1px; padding: 0 0 8px; }
 .lm-trace-row .seg { display: block; flex-shrink: 0; border: 1px solid var(--rule); background: var(--bg-3); }
 .lm-trace-row .seg.fire { background: var(--green); }
 .lm-trace-row .seg.warn { background: var(--amber); }
