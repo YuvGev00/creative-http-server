@@ -15,6 +15,14 @@ const ws = require('./websocket');
 const MAX_REQUEST_BYTES = 5 * 1024 * 1024; // guard against unbounded buffering
 const SOCKET_TIMEOUT_MS = 30 * 1000; // reap idle / wedged connections
 
+// Static-asset extensions the Flight Recorder skips, so the timeline shows
+// meaningful traffic (API calls, page navigations) rather than the .css/.js/
+// .svg fetches every page load fans out into.
+const STATIC_ASSET_RE = /\.(css|js|mjs|svg|png|jpe?g|gif|ico|webp|woff2?|ttf|map)$/i;
+function isStaticAsset(path) {
+  return STATIC_ASSET_RE.test(path);
+}
+
 // The application object. Chainable, Express-flavoured API plus the creative
 // typed-route layer (app.route) and auto docs at /_routes.
 class App {
@@ -212,10 +220,15 @@ class App {
 
           const res = new Response(socket, req.method);
 
-          // Flight Recorder: don't record the trace endpoint itself, to
-          // avoid it filling its own log.
+          // Flight Recorder: don't record the trace endpoint itself (it
+          // would fill its own log), nor static-asset fetches (.css/.js/
+          // .svg/etc). Every page pulls several assets and /_trace auto-
+          // refreshes every 3s, so recording them floods the 50-entry ring
+          // buffer with noise and evicts the interesting API/page requests.
           const traceEntry =
-            req.path === '/_trace' ? null : this.recorder.start(req);
+            req.path === '/_trace' || isStaticAsset(req.path)
+              ? null
+              : this.recorder.start(req);
 
           try {
             await this.router.dispatch(
