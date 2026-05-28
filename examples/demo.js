@@ -27,6 +27,11 @@ app.get('/api/users', (req, res) => {
   res.json(users);
 });
 
+// Plain POST handler: echoes the parsed JSON body back with a 201.
+app.post('/api/echo', (req, res) => {
+  res.status(201).json(req.body);
+});
+
 // --- Creative feature: declarative typed route with body validation ---
 app.route({
   method: 'POST',
