@@ -35,30 +35,33 @@ function fmtBytes(b) {
   return (b / 1024 / 1024).toFixed(1) + ' MB';
 }
 
+// Round a millisecond value to a compact label: sub-1ms keeps 2 decimals,
+// otherwise 1 decimal (drops a trailing .0). Avoids long float tails like
+// "0.11700000003ms" overflowing the legend / axis.
+function fmtMs(ms) {
+  const n = Number(ms) || 0;
+  if (n < 1) return n.toFixed(2).replace(/\.?0+$/, '') || '0';
+  return n.toFixed(1).replace(/\.0$/, '');
+}
+
 function pickTicks(total) {
-  // Aim for 4–6 evenly-spaced ticks across the bar
-  if (total <= 0) return [0];
-  let step = 1;
-  if (total > 5) step = Math.ceil(total / 6);
-  if (total > 20) step = 5;
-  if (total > 50) step = 10;
-  const out = [];
-  for (let t = 0; t <= total; t += step) out.push(t);
-  if (out[out.length - 1] !== total) out.push(total);
-  return out;
+  // 2–3 evenly-spaced ticks across the bar, never the leading 0 (it sits at
+  // the very left edge and gets clipped by the translateX(-50%) centering).
+  if (total <= 0) return [];
+  return [total / 2, total];
 }
 
 function renderRow(e) {
   const total = (e.steps || []).reduce((a, s) => a + (s.ms || 0), 0) || 1;
   const ticks = pickTicks(total);
   const segs = (e.steps || []).map((s) =>
-    `<span class="seg ${stepClass(s.name, e.validation)}" title="${esc(s.name)} — ${s.ms} ms" style="flex-basis:${Math.max(1, (s.ms / total) * 100)}%"></span>`
+    `<span class="seg ${stepClass(s.name, e.validation)}" title="${esc(s.name)} — ${fmtMs(s.ms)} ms" style="flex-basis:${Math.max(1, (s.ms / total) * 100)}%"></span>`
   ).join('');
   const legend = (e.steps || []).map((s) =>
-    `<span>${esc(s.name)} <b>${s.ms}ms</b></span>`
+    `<span>${esc(s.name)} <b>${fmtMs(s.ms)}ms</b></span>`
   ).join('');
   const axis = ticks.map((t) =>
-    `<i style="left:${(t / total) * 100}%"></i><span style="left:${(t / total) * 100}%">${t}ms</span>`
+    `<i style="left:${(t / total) * 100}%"></i><span style="left:${(t / total) * 100}%">${fmtMs(t)}ms</span>`
   ).join('');
 
   return (
@@ -67,7 +70,7 @@ function renderRow(e) {
         `<span class="s ${statusClass(e.status)}">${e.status}</span>` +
         `<span class="m">${esc(e.method)}</span>` +
         `<span class="p">${highlightPath(e.path)}</span>` +
-        `<span class="ms">${e.totalMs} ms</span>` +
+        `<span class="ms">${fmtMs(e.totalMs)} ms</span>` +
         `<span class="b">${esc(typeof e.bytes === 'number' ? fmtBytes(e.bytes) : (e.bytes || '—'))}</span>` +
         `<span class="ts">${esc(e.time)}</span>` +
       '</div>' +
@@ -151,8 +154,8 @@ function renderHtml(entries) {
 
   <div class="lm-trace-grid">
     <div><div class="k">entries</div><div class="v">${total}</div></div>
-    <div><div class="k">p50</div><div class="v green">${p50}<small>ms</small></div></div>
-    <div><div class="k">p99</div><div class="v">${p99}<small>ms</small></div></div>
+    <div><div class="k">p50</div><div class="v green">${fmtMs(p50)}<small>ms</small></div></div>
+    <div><div class="k">p99</div><div class="v">${fmtMs(p99)}<small>ms</small></div></div>
     <div><div class="k">errors</div><div class="v hot">${String(errors).padStart(2, '0')}</div></div>
     <div><div class="k">validations</div><div class="v">${validations}</div></div>
   </div>

@@ -184,7 +184,9 @@ function renderRoute(r) {
   const rh = (curl || resp) ? [
     curl ? (
       '<div class="codeblock">' +
-        '<div class="lbl"><span>request</span><b>copy ⌘C</b></div>' +
+        '<div class="lbl"><span>request</span>' +
+          '<button type="button" class="copy-btn" data-copy="' + esc(curl) + '">copy</button>' +
+        '</div>' +
         '<pre>' + hiCurl(curl) + '</pre>' +
       '</div>'
     ) : '',
@@ -207,7 +209,11 @@ function renderRoute(r) {
       '<div class="lm-route-head">' +
         '<span class="m ' + method + '">' + method + '</span>' +
         '<span class="p">' + highlightPath(r.path) + '</span>' +
-        '<a class="try" href="' + esc(r.path.replace(/:\w+/g, '42')) + '">try it ↵</a>' +
+        // "try it" opens the endpoint in the browser — only meaningful for GET
+        // (a plain link can't issue POST/PUT/etc.), so we omit it otherwise.
+        (method === 'GET'
+          ? '<a class="try" href="' + esc(r.path.replace(/:\w+/g, '42')) + '" target="_blank" rel="noopener">try it ↗</a>'
+          : '') +
       '</div>' +
       '<div class="lm-route-body' + (rh ? '' : ' single') + '">' +
         '<div class="lh">' + (lh || '<p class="d" style="color:var(--muted)">no documentation</p>') + '</div>' +
@@ -287,7 +293,7 @@ function renderHtml(router) {
     <span class="on">all<b>${total}</b></span>
     ${['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].filter(m => counts[m]).map(m =>
       `<span>${m.toLowerCase()}<b>${counts[m]}</b></span>`).join('')}
-    <span class="ml-auto">filter: <code style="color:var(--muted)">type to search…</code></span>
+    <input id="route-search" class="ml-auto route-search" type="text" placeholder="filter routes…" autocomplete="off">
   </div>
 
   ${cards}
@@ -306,19 +312,44 @@ function renderHtml(router) {
 
 <script src="./loom-shared.js"></script>
 <script>
-// Filter routes by tabs (client-side, no network)
-const tabs = document.querySelectorAll('.lm-routes-tabs span');
-const routes = document.querySelectorAll('.lm-route');
+// Filter routes by method tab + free-text search (client-side, no network).
+const tabs = Array.from(document.querySelectorAll('.lm-routes-tabs span'));
+const routes = Array.from(document.querySelectorAll('.lm-route'));
+const search = document.getElementById('route-search');
+let activeMethod = 'all';
+
+function applyFilters() {
+  const q = (search.value || '').trim().toLowerCase();
+  routes.forEach((r) => {
+    const m = ((r.querySelector('.m') || {}).textContent || '').toLowerCase();
+    const path = ((r.querySelector('.p') || {}).textContent || '').toLowerCase();
+    const okMethod = activeMethod === 'all' || m === activeMethod;
+    const okText = !q || path.includes(q) || m.includes(q);
+    r.style.display = (okMethod && okText) ? '' : 'none';
+  });
+}
+
 tabs.forEach((t) => {
-  if (t.classList.contains('ml-auto')) return;
   t.addEventListener('click', () => {
     tabs.forEach((x) => x.classList.remove('on'));
     t.classList.add('on');
-    const label = (t.textContent || '').replace(/[0-9]/g, '').trim();
-    routes.forEach((r) => {
-      const m = (r.querySelector('.m') || {}).textContent || '';
-      r.style.display = (label === 'all' || m.toLowerCase() === label) ? '' : 'none';
-    });
+    activeMethod = (t.textContent || '').replace(/[0-9]/g, '').trim();
+    applyFilters();
+  });
+});
+search.addEventListener('input', applyFilters);
+
+// "copy" buttons — copy the curl command to the clipboard.
+document.querySelectorAll('.copy-btn').forEach((b) => {
+  b.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(b.dataset.copy || '');
+      const prev = b.textContent;
+      b.textContent = 'copied ✓';
+      setTimeout(() => { b.textContent = prev; }, 1200);
+    } catch (_) {
+      b.textContent = 'copy failed';
+    }
   });
 });
 </script>
