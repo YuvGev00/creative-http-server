@@ -101,13 +101,14 @@ class App {
       'GET',
       this._docsPath,
       (req, res) => {
+        const wsPaths = [...this.wsRoutes.keys()];
         if ((req.query.format || '') === 'json') {
-          return res.json(docs.renderJson(this.router));
+          return res.json(docs.renderJson(this.router, wsPaths));
         }
         res
           .status(200)
           .set('Content-Type', 'text/html; charset=utf-8')
-          .send(docs.renderHtml(this.router));
+          .send(docs.renderHtml(this.router, wsPaths));
       },
       { hidden: true }
     );

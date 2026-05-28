@@ -455,6 +455,22 @@ async function main() {
     'accept key mismatch'
   );
 
+  // 26. requireMask rejects an unmasked client frame (RFC 6455 §5.1).
+  {
+    const unmasked = Buffer.from([0x81, 0x03, 0x61, 0x62, 0x63]); // FIN+text, len 3, "abc", no mask bit
+    const decoded = wsproto.decodeFrames(unmasked, true);
+    ok('WS rejects unmasked client frame', decoded.error === 'unmasked client frame', `got ${JSON.stringify(decoded.error)}`);
+  }
+
+  // 27. Oversized declared frame is rejected, not buffered.
+  {
+    const huge = Buffer.alloc(14);
+    huge[0] = 0x81; huge[1] = 0x80 | 127;        // masked, 64-bit length
+    huge.writeBigUInt64BE(BigInt(50 * 1024 * 1024), 2); // 50 MB declared
+    const decoded = wsproto.decodeFrames(huge, true);
+    ok('WS rejects oversized frame', decoded.error === 'frame too large', `got ${JSON.stringify(decoded.error)}`);
+  }
+
   // --- Creative feature: Draw & Guess game logic ---
   {
     const { DrawGame } = require('../src/draw-game');

@@ -127,7 +127,7 @@ function renderHtml(entries) {
   <div class="meta">
     <span>:3000</span>
     <span class="live"><span class="pulse"></span>recording</span>
-    <button class="lm-theme-btn" type="button">☀ light</button>
+    <button class="lm-theme-btn" type="button" aria-label="Toggle light/dark theme" title="Toggle theme (⇧T)">☀ light</button>
   </div>
 </header>
 

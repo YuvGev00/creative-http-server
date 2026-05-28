@@ -27,10 +27,16 @@ function isUpgrade(req) {
   );
 }
 
+const MAX_WS_FRAME = 10 * 1024 * 1024;
+
 // Decode as many complete frames as `buf` holds. Returns
-// { frames: [{opcode, payload}], rest: Buffer }. Only handles client frames
-// (always masked), payloads up to 64-bit length.
-function decodeFrames(buf) {
+// { frames: [{opcode, payload}], rest: Buffer, error?: '...' }. A protocol
+// violation (oversized frame, or — when `requireMask` is set — an unmasked
+// client frame) sets `error` so the caller can close with code 1002 rather
+// than keep buffering. The server passes requireMask=true (RFC 6455 §5.1:
+// clients MUST mask); the same decoder with requireMask=false also reads
+// server→client frames (which are unmasked), e.g. in tests.
+function decodeFrames(buf, requireMask = false) {
   const frames = [];
   let offset = 0;
 
@@ -51,10 +57,18 @@ function decodeFrames(buf) {
       // Node Buffer can't safely read full 64-bit; assume < 2^53.
       len = Number(buf.readBigUInt64BE(p));
       p += 8;
-      if (len > 10 * 1024 * 1024) {
-        // Oversized frame: stop decoding, return what we have so far.
-        return { frames, rest: buf.slice(offset) };
-      }
+    }
+
+    // Reject oversized frames: stop decoding and signal a protocol error so
+    // we don't sit buffering an attacker-declared multi-GB payload.
+    if (len > MAX_WS_FRAME) {
+      return { frames, rest: Buffer.alloc(0), error: 'frame too large' };
+    }
+
+    // RFC 6455 §5.1: a client MUST mask all frames; a server MUST close on an
+    // unmasked one. Only enforced when decoding client→server frames.
+    if (requireMask && !masked) {
+      return { frames, rest: Buffer.alloc(0), error: 'unmasked client frame' };
     }
 
     let maskKey;
@@ -154,9 +168,20 @@ function handleUpgrade(req, socket, handler, leftover = Buffer.alloc(0)) {
   const conn = new WebSocketConnection(socket);
   let buffer = leftover;
 
+  // Send a Close frame (code 1002 = protocol error) and tear the socket down.
+  const closeProtocol = () => {
+    if (!conn.open) return;
+    conn.open = false;
+    const code = Buffer.from([0x03, 0xea]); // 1002
+    try { socket.write(encodeFrame(code, OPCODES.CLOSE)); } catch (_) {}
+    conn._emit('close');
+    socket.end();
+  };
+
   const pump = () => {
-    const { frames, rest } = decodeFrames(buffer);
+    const { frames, rest, error } = decodeFrames(buffer, true);
     buffer = rest;
+    if (error) { closeProtocol(); return; }
     for (const f of frames) {
       if (f.opcode === OPCODES.CLOSE) {
         conn.open = false;

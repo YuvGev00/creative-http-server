@@ -40,17 +40,30 @@ function serveStatic(rootDir, options = {}) {
       return res.status(403).json({ error: 'Forbidden', reason: 'path traversal blocked' });
     }
 
+    // Resolve symlinks and re-verify containment: a symlink inside the served
+    // root could otherwise point outside it (e.g. -> /etc/passwd) and leak a
+    // file the lexical check above can't catch.
+    const serveContained = (file, after) => {
+      fs.realpath(file, (rpErr, real) => {
+        if (rpErr) return next();
+        if (real !== root && !real.startsWith(root + path.sep)) {
+          return res.status(403).json({ error: 'Forbidden', reason: 'symlink escapes root' });
+        }
+        res.sendFile(real, after);
+      });
+    };
+
     fs.stat(target, (err, stats) => {
       if (err) return next(); // not found here -> let router 404
       if (stats.isDirectory()) {
         const indexPath = path.join(target, indexFile);
         return fs.stat(indexPath, (e2, s2) => {
           if (e2 || !s2.isFile()) return next();
-          res.sendFile(indexPath, () => next());
+          serveContained(indexPath, () => next());
         });
       }
       if (!stats.isFile()) return next();
-      res.sendFile(target, () => next());
+      serveContained(target, () => next());
     });
   };
 }

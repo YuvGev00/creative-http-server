@@ -14,7 +14,7 @@ node examples/demo.js      # or: npm start
 # → http://localhost:3000
 # → http://localhost:3000/_routes   (live API reference)
 
-node test/smoke.js         # or: npm test  (34 assertions, raw-socket driven)
+node test/smoke.js         # or: npm test  (43 assertions, raw-socket driven)
 ```
 
 ## API design choices
@@ -184,13 +184,14 @@ src/trace-view.js   Live /_trace timeline renderer   (creative 2)
 src/websocket.js    RFC 6455 handshake + frame codec (creative 3)
 src/draw-game.js    Draw & Guess game rules (transport-agnostic, creative 4)
 examples/demo.js    Wires every feature (incl. /chat + /game WebSockets)
-test/smoke.js       34 raw-socket assertions, exits non-zero on failure
+test/smoke.js       43 raw-socket assertions, exits non-zero on failure
 ```
 
 ## Verification
 
 `npm test` boots the framework on an ephemeral port and drives it with a raw
-`net` client (34 assertions), covering: JSON routes, path params,
+`net` client (43 assertions), covering: JSON routes, path params, a full
+`/api/users` CRUD round-trip (GET/POST/PUT/PATCH/DELETE → 404),
 valid/invalid typed-route validation, static MIME, traversal blocking, the
 live docs (HTML + JSON), a split-across-TCP-chunks request, 404 handling,
 hardening cases — malformed/conflicting `Content-Length`, rejected chunked

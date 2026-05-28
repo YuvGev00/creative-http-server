@@ -3,8 +3,8 @@
 // Renders the live API documentation served at /_routes — loom-styled.
 // Schemas live with the handlers, so this view cannot drift from code.
 
-function collectRoutes(router) {
-  return router.routes
+function collectRoutes(router, wsPaths = []) {
+  const http = router.routes
     .filter((r) => !r.meta.hidden)
     .map((r) => ({
       method: r.method,
@@ -13,10 +13,20 @@ function collectRoutes(router) {
       description: r.meta.description || '',
       bodySchema: r.meta.bodySchema || null,
     }));
+  // WebSocket endpoints live outside the HTTP router; surface them too so the
+  // reference documents the framework's headline feature.
+  const ws = wsPaths.map((p) => ({
+    method: 'WS',
+    path: p,
+    params: [],
+    description: 'WebSocket endpoint (RFC 6455). Connect with ws:// to upgrade.',
+    bodySchema: null,
+  }));
+  return [...http, ...ws];
 }
 
-function renderJson(router) {
-  return { service: 'loom', routes: collectRoutes(router) };
+function renderJson(router, wsPaths = []) {
+  return { service: 'loom', routes: collectRoutes(router, wsPaths) };
 }
 
 function esc(s) {
@@ -106,6 +116,11 @@ function exampleBody(bodySchema) {
 function curlFor(r) {
   const url = ':3000' + r.path.replace(/:(\w+)/g, (_, k) =>
     ({ id: '42' }[k] || ('{' + k + '}')));
+  if (r.method === 'WS') {
+    // Not an HTTP call — show how to open the socket from the browser.
+    return "const ws = new WebSocket('ws://localhost:3000" + r.path + "');\n" +
+           "ws.onmessage = (e) => console.log(e.data);";
+  }
   if (r.method === 'GET') return 'curl ' + url;
   if (r.method === 'DELETE') return 'curl -X DELETE ' + url;
 
@@ -151,7 +166,7 @@ function schemaRows(schema) {
     if (rule.required) rules.push('<span class="req">required</span>');
     if (rule.min !== undefined) rules.push('min ' + rule.min);
     if (rule.max !== undefined) rules.push('max ' + rule.max);
-    if (rule.enum) rules.push('enum [' + rule.enum.join(', ') + ']');
+    if (rule.enum) rules.push('enum [' + rule.enum.map(esc).join(', ') + ']');
     if (rule.pattern) rules.push('pattern');
     return '<div class="row">' +
       '<code>' + esc(field) + '</code>' +
@@ -216,7 +231,7 @@ function renderRoute(r) {
   return (
     '<div class="lm-route">' +
       '<div class="lm-route-head">' +
-        '<span class="m ' + method + '">' + method + '</span>' +
+        '<span class="m ' + method.replace(/[^A-Za-z]/g, '') + '">' + esc(method) + '</span>' +
         '<span class="p">' + highlightPath(r.path) + '</span>' +
         // "try it" opens the endpoint in the browser — only meaningful for GET
         // (a plain link can't issue POST/PUT/etc.), so we omit it otherwise.
@@ -233,8 +248,8 @@ function renderRoute(r) {
 }
 
 // ─── full page ─────────────────────────────────────────────────────────
-function renderHtml(router) {
-  const routes = collectRoutes(router);
+function renderHtml(router, wsPaths = []) {
+  const routes = collectRoutes(router, wsPaths);
   const counts = routes.reduce((acc, r) => { acc[r.method] = (acc[r.method] || 0) + 1; return acc; }, {});
   const total = routes.length;
   const cards = routes.length
@@ -282,7 +297,7 @@ function renderHtml(router) {
   <div class="meta">
     <span>:3000</span>
     <span><b>${total}</b> routes</span>
-    <button class="lm-theme-btn" type="button">☀ light</button>
+    <button class="lm-theme-btn" type="button" aria-label="Toggle light/dark theme" title="Toggle theme (⇧T)">☀ light</button>
   </div>
 </header>
 
@@ -299,10 +314,10 @@ function renderHtml(router) {
   </div>
 
   <div class="lm-routes-tabs">
-    <span class="on">all<b>${total}</b></span>
-    ${['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].filter(m => counts[m]).map(m =>
-      `<span>${m.toLowerCase()}<b>${counts[m]}</b></span>`).join('')}
-    <input id="route-search" class="ml-auto route-search" type="text" placeholder="filter routes…" autocomplete="off">
+    <span class="on" role="button" tabindex="0" aria-pressed="true">all<b>${total}</b></span>
+    ${['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'WS'].filter(m => counts[m]).map(m =>
+      `<span role="button" tabindex="0" aria-pressed="false">${m.toLowerCase()}<b>${counts[m]}</b></span>`).join('')}
+    <input id="route-search" class="ml-auto route-search" type="text" aria-label="Filter routes" placeholder="filter routes…" autocomplete="off">
   </div>
 
   ${cards}
@@ -338,12 +353,17 @@ function applyFilters() {
   });
 }
 
+function selectTab(t) {
+  tabs.forEach((x) => { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+  t.classList.add('on');
+  t.setAttribute('aria-pressed', 'true');
+  activeMethod = (t.textContent || '').replace(/[0-9]/g, '').trim();
+  applyFilters();
+}
 tabs.forEach((t) => {
-  t.addEventListener('click', () => {
-    tabs.forEach((x) => x.classList.remove('on'));
-    t.classList.add('on');
-    activeMethod = (t.textContent || '').replace(/[0-9]/g, '').trim();
-    applyFilters();
+  t.addEventListener('click', () => selectTab(t));
+  t.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectTab(t); }
   });
 });
 search.addEventListener('input', applyFilters);

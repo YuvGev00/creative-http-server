@@ -10,7 +10,7 @@
   --bg-3:   #dedaca;
   --ink:    #0d0c08;
   --ink-2:  #2d2b22;
-  --muted:  #6b6a5e;
+  --muted:  #595849; /* ~5:1 on --bg, clears WCAG AA for small text */
   --rule:   #c8c3aa;
   --rule-2: #b8b290;
   --green:  oklch(0.50 0.16 145);
@@ -59,6 +59,17 @@ a { color: var(--green); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 code { font-family: inherit; }
 pre { margin: 0; font-family: inherit; }
+
+/* Visible keyboard-focus indicator for every interactive element. Uses
+   :focus-visible so it only shows for keyboard nav, not mouse clicks. */
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+/* Don't let component rules below silently remove it. */
+a:focus-visible, button:focus-visible, input:focus-visible,
+[tabindex]:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
 /* subtle CRT scanlines in dark — barely there */
 html[data-theme="dark"] body::before {
