@@ -1,151 +1,282 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Forge — WebSocket Chat</title>
-  <style>
-    :root { color-scheme: dark; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #1a2233, #0d1117);
-      color: #e6edf3;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2.5vh 4vw;
-    }
-
-    header { text-align: center; margin-bottom: 1.5rem; }
-    header h1 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: .6rem; }
-    header p { color: #9aa6b2; font-size: 1.05rem; max-width: 640px; }
-    code { background: #21262d; padding: .15rem .45rem; border-radius: 5px;
-      font-family: ui-monospace, Menlo, monospace; font-size: .9em; }
-
-    /* Big, obvious call-to-action so nobody has to guess */
-    .hint {
-      display: flex; align-items: center; gap: 1rem;
-      background: #161b22; border: 1px solid #30425f;
-      border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem;
-      max-width: 900px; width: 100%;
-    }
-    .hint .num {
-      flex: none; width: 2.2rem; height: 2.2rem; border-radius: 50%;
-      background: #4c9aff; color: #04122b; font-weight: 800;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .hint p { color: #c9d6e3; font-size: 1rem; }
-    .hint button {
-      margin-left: auto; flex: none; padding: .8rem 1.4rem; border: 0;
-      border-radius: 10px; background: #4c9aff; color: #04122b;
-      font-weight: 700; font-size: 1rem; cursor: pointer;
-    }
-    .hint button:hover { background: #6db0ff; }
-
-    .chat {
-      width: 100%; max-width: 900px; flex: 1;
-      display: flex; flex-direction: column;
-      background: #161b22; border: 1px solid #21262d;
-      border-radius: 14px; overflow: hidden; min-height: 0;
-    }
-    .status {
-      padding: .8rem 1.4rem; border-bottom: 1px solid #21262d;
-      font-size: .95rem; color: #8b949e;
-      display: flex; align-items: center; gap: .6rem;
-    }
-    .dot { width: 10px; height: 10px; border-radius: 50%;
-      background: #f85149; transition: background .2s; }
-    .dot.on { background: #36b37e; }
-
-    #log {
-      flex: 1; overflow-y: auto; padding: 1.4rem;
-      display: flex; flex-direction: column; gap: .6rem;
-      font-size: 1.05rem; min-height: 0;
-    }
-    #log .msg {
-      align-self: flex-start; background: #243049;
-      padding: .6rem 1rem; border-radius: 12px 12px 12px 4px;
-      max-width: 75%; word-break: break-word;
-    }
-    #log .sys {
-      align-self: center; color: #8b949e; font-style: italic;
-      font-size: .9rem;
-    }
-
-    form {
-      display: flex; gap: .8rem; padding: 1.2rem 1.4rem;
-      border-top: 1px solid #21262d;
-    }
-    input {
-      flex: 1; padding: 1rem 1.2rem; border-radius: 12px;
-      border: 1px solid #30425f; background: #0d1117;
-      color: #e6edf3; font-size: 1.05rem;
-    }
-    input:focus { outline: 2px solid #4c9aff; }
-    form button {
-      padding: 1rem 1.8rem; border: 0; border-radius: 12px;
-      background: #4c9aff; color: #04122b; font-weight: 700;
-      font-size: 1.05rem; cursor: pointer;
-    }
-    form button:hover { background: #6db0ff; }
-  </style>
+  <title>loom — chat</title>
+  <link rel="icon" href="./loom.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./loom.css">
+  <script>
+    (function () { try { document.documentElement.setAttribute('data-theme', localStorage.getItem('loom-theme') || 'dark'); } catch (e) {} })();
+  </script>
 </head>
 <body>
-  <header>
-    <h1>⚒ WebSocket Chat</h1>
-    <p>Real-time chat over a <strong>hand-rolled WebSocket</strong> on raw
-       <code>net</code> sockets — no <code>ws</code> library, no
-       <code>http</code> module.</p>
-  </header>
 
-  <div class="hint">
+<header class="lm-bar">
+  <div class="mark">
+    <svg viewBox="0 0 28 28" width="26" height="26" aria-hidden="true">
+      <line x1="5"  y1="2" x2="5"  y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <line x1="11" y1="2" x2="11" y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <line x1="17" y1="2" x2="17" y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <line x1="23" y1="2" x2="23" y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <g stroke="currentColor" stroke-width="1.4" opacity="0.45" stroke-linecap="square">
+        <line x1="1" y1="8" x2="4" y2="8"/><line x1="6" y1="8" x2="10" y2="8"/><line x1="12" y1="8" x2="16" y2="8"/><line x1="18" y1="8" x2="22" y2="8"/><line x1="24" y1="8" x2="27" y2="8"/>
+        <line x1="1" y1="20" x2="4" y2="20"/><line x1="6" y1="20" x2="10" y2="20"/><line x1="12" y1="20" x2="16" y2="20"/><line x1="18" y1="20" x2="22" y2="20"/><line x1="24" y1="20" x2="27" y2="20"/>
+      </g>
+      <line class="lm-mark-accent" x1="0" y1="14" x2="28" y2="14" stroke-width="2.4" stroke-linecap="square"/>
+    </svg>
+    <span class="nm">loom</span>
+    <span class="sub">// weaves <b>http/1.1</b> from raw net</span>
+  </div>
+  <nav class="crumbs">
+    <a href="/"><span class="kbd">[g]</span>index</a>
+    <a href="/chat.html" class="on"><span class="kbd">[c]</span>chat</a>
+    <a href="/game.html"><span class="kbd">[p]</span>game</a>
+    <a href="/_routes"><span class="kbd">[r]</span>routes</a>
+    <a href="/_trace"><span class="kbd">[t]</span>trace</a>
+  </nav>
+  <div class="meta">
+    <span>:3000</span>
+    <span class="live"><span class="pulse"></span><span id="peers">…</span> peers</span>
+    <button class="lm-theme-btn" type="button">☀ light</button>
+  </div>
+</header>
+
+<main class="lm-stage">
+
+  <div class="lm-hint">
     <span class="num">1</span>
-    <p>This is a chat <strong>between browser tabs</strong>. Click the button
-       to open a second tab, then type in either one — messages appear in both
-       instantly.</p>
-    <button id="openTab">Open a 2nd tab →</button>
+    <p>Chat lives <b>between browser tabs</b>. Open a second tab, type in either — every connected client receives the broadcast frame.</p>
+    <button id="openTab">open 2nd tab ↗</button>
   </div>
 
-  <div class="chat">
-    <div class="status"><span class="dot" id="dot"></span><span id="state">connecting…</span></div>
-    <div id="log"></div>
-    <form id="f">
-      <input id="m" autocomplete="off" placeholder="Type a message and press Send…" />
-      <button>Send</button>
-    </form>
+  <div class="lm-chat-grid">
+
+    <!-- ── main chat panel ── -->
+    <div class="lm-panel flex lm-chat-shell">
+      <div class="head">
+        <span><span class="title">chat</span> &nbsp;·&nbsp; ws://<span id="wsHost">…</span>/chat</span>
+        <span class="right">
+          <span id="status" style="color:var(--muted)">connecting…</span>
+          <span style="color:var(--muted)">tab <b id="tabName" style="color:var(--ink)">tab#-</b></span>
+        </span>
+      </div>
+      <div class="lm-chatlog" id="log"></div>
+      <form id="f" class="lm-prompt">
+        <span class="ps">›</span>
+        <input id="m" autocomplete="off" placeholder="type a message and press send…">
+        <span class="send"><b>↵</b> send</span>
+      </form>
+    </div>
+
+    <!-- ── side: conn info + frame inspector ── -->
+    <aside class="lm-side">
+      <div class="lm-panel">
+        <div class="head">
+          <span class="title">conn.info</span>
+          <span id="connBadge" style="color:var(--muted)">…</span>
+        </div>
+        <div class="lm-conn">
+          <div class="row"><span class="k">state</span><span class="v" id="connState">connecting</span></div>
+          <div class="row"><span class="k">accept-key</span><span class="v on">verified</span></div>
+          <div class="row"><span class="k">subprotocol</span><span class="v">—</span></div>
+          <div class="row"><span class="k">peers</span><span class="v" id="connPeers">·</span></div>
+          <div class="row"><span class="k">tx frames</span><span class="v" id="connTx">0</span></div>
+          <div class="row"><span class="k">rx frames</span><span class="v" id="connRx">0</span></div>
+          <div class="row"><span class="k">total bytes</span><span class="v" id="connBytes">0</span></div>
+        </div>
+      </div>
+      <div class="lm-panel flex" style="flex:1; min-height:0">
+        <div class="head"><span class="title">frame inspector</span><span>last 8 · rfc 6455</span></div>
+        <div class="lm-frames" id="frames"></div>
+      </div>
+    </aside>
   </div>
 
-  <script>
-    document.getElementById('openTab').addEventListener('click', () => {
-      window.open(location.href, '_blank');
-    });
+</main>
 
-    const log = document.getElementById('log');
-    const dot = document.getElementById('dot');
-    const state = document.getElementById('state');
-    const add = (text, cls) => {
-      const d = document.createElement('div');
-      d.className = cls || 'msg';
-      d.textContent = text;
-      log.appendChild(d);
-      log.scrollTop = log.scrollHeight;
-    };
+<footer class="lm-foot">
+  <span class="badge">loom 0.1</span>
+  <span><span class="muted">cwd</span> <span style="color:var(--ink)">/chat</span></span>
+  <span><span class="muted">tx</span> <b style="color:var(--ink)" id="fTx">0</b> <span class="muted">rx</span> <b style="color:var(--ink)" id="fRx">0</b></span>
+  <span><span class="muted">accept-key</span> <span class="ok">verified</span></span>
+  <span><span class="muted">clock</span> <span class="clock">--:--:--</span></span>
+  <span class="spacer"></span>
+  <span class="kbd-hints">nav <b>g</b> <b>c</b> <b>p</b> <b>r</b> <b>t</b> · theme <b>⇧t</b></span>
+</footer>
 
-    const ws = new WebSocket(`ws://${location.host}/chat`);
-    ws.onopen = () => { dot.classList.add('on'); state.textContent = 'connected'; };
-    ws.onclose = () => { dot.classList.remove('on'); state.textContent = 'disconnected'; };
-    ws.onmessage = (e) => {
-      const d = JSON.parse(e.data);
-      if (d.system) add(d.system, 'sys');
-      else add(d.msg);
-    };
-    document.getElementById('f').addEventListener('submit', (ev) => {
-      ev.preventDefault();
-      const i = document.getElementById('m');
-      if (i.value && ws.readyState === 1) { ws.send(i.value); i.value = ''; }
-    });
-  </script>
+<script src="./loom-shared.js"></script>
+<script>
+'use strict';
+
+// ─── identity for this tab ───
+let tabId = sessionStorage.getItem('loom-tab-id');
+if (!tabId) {
+  tabId = 'tab#' + Math.floor(Math.random() * 900 + 100);
+  sessionStorage.setItem('loom-tab-id', tabId);
+}
+document.getElementById('tabName').textContent = tabId;
+document.getElementById('wsHost').textContent = location.host;
+
+// ─── refs ───
+const $ = (id) => document.getElementById(id);
+const log = $('log');
+const framesEl = $('frames');
+const statusEl = $('status');
+const connState = $('connState');
+const connBadge = $('connBadge');
+const peersEl = $('peers');
+const connPeers = $('connPeers');
+const connTx = $('connTx');
+const connRx = $('connRx');
+const connBytes = $('connBytes');
+const footTx = $('fTx');
+const footRx = $('fRx');
+
+let tx = 0, rx = 0, bytes = 0, peers = 1;
+const recentFrames = [];   // last 8
+
+// ─── helpers ───
+function pad2(n) { return String(n).padStart(2, '0'); }
+function now() {
+  const d = new Date();
+  return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()) +
+         '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function addLine(who, text, cls) {
+  const el = document.createElement('div');
+  el.className = 'lm-line ' + (cls || '');
+  el.innerHTML =
+    '<span class="ts">' + now() + '</span>' +
+    '<span class="who ' + (cls || '') + '">' + esc(who) + '</span>' +
+    '<span class="text">' + esc(text) + '</span>';
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+function hexPreview(s) {
+  // first 18 bytes as hex pairs (just for display)
+  const bytes = [];
+  for (let i = 0; i < Math.min(s.length, 18); i++) {
+    bytes.push(s.charCodeAt(i).toString(16).padStart(2, '0'));
+  }
+  return bytes.join(' ');
+}
+
+function addFrame(dir, op, text, sz) {
+  recentFrames.push({ dir, op, text, sz, hex: hexPreview(text || '') });
+  while (recentFrames.length > 8) recentFrames.shift();
+  let html = '';
+  for (const f of recentFrames) {
+    const arrow = f.dir === 'in' ? '◂' : '▸';
+    const preview = f.text ? '"' + (f.text.length > 36 ? f.text.slice(0, 36) + '…' : f.text) + '"' : (f.op === 'ping' ? 'keepalive' : '—');
+    html +=
+      '<div class="lm-frame">' +
+        '<span class="arr ' + f.dir + '">' + arrow + '</span>' +
+        '<span class="op ' + f.op + '">' + f.op + '</span>' +
+        '<span class="hex"><b>' + esc(f.hex) + '</b> · ' + esc(preview) + '</span>' +
+        '<span class="sz">' + f.sz + ' B</span>' +
+      '</div>';
+  }
+  framesEl.innerHTML = html;
+}
+
+function updateCounts() {
+  connTx.textContent = String(tx);
+  connRx.textContent = String(rx);
+  connBytes.textContent = String(bytes);
+  footTx.textContent = String(tx);
+  footRx.textContent = String(rx);
+}
+
+function setState(s, color) {
+  statusEl.textContent = s;
+  statusEl.style.color = color;
+  connState.textContent = s;
+  connState.className = 'v ' + (color === 'var(--green)' ? 'on' : color === 'var(--red)' ? 'off' : '');
+  connBadge.textContent = s;
+  connBadge.style.color = color;
+}
+
+// ─── 2nd tab opener ───
+$('openTab').addEventListener('click', () => window.open(location.href, '_blank'));
+
+// ─── websocket ───
+let ws;
+function connect() {
+  setState('connecting…', 'var(--muted)');
+  ws = new WebSocket('ws://' + location.host + '/chat');
+
+  ws.onopen = () => {
+    setState('connected', 'var(--green)');
+    // announce ourselves so peers can show our tabId on receive
+    sendWire(JSON.stringify({ kind: 'hello', from: tabId }));
+  };
+
+  ws.onclose = () => {
+    setState('disconnected — reconnecting…', 'var(--red)');
+    setTimeout(connect, 1200);
+  };
+
+  ws.onmessage = (e) => {
+    rx++; bytes += e.data.length;
+    let m;
+    try { m = JSON.parse(e.data); } catch { m = null; }
+
+    if (m && m.system) {
+      addLine('sys', m.system, 'sys');
+      addFrame('in', 'text', m.system, e.data.length);
+      // try to extract peer count from "welcome — N online"
+      const match = /(\d+)\s+online/.exec(m.system);
+      if (match) { peers = parseInt(match[1], 10); peersEl.textContent = peers; connPeers.textContent = peers; }
+    } else if (m && m.msg !== undefined) {
+      // server wraps the original msg string. Try to parse it as our wire JSON.
+      let inner;
+      try { inner = JSON.parse(m.msg); } catch { inner = null; }
+      if (inner && inner.kind === 'hello') {
+        // peer announced — silently ignore
+        addFrame('in', 'text', m.msg, e.data.length);
+      } else if (inner && inner.kind === 'msg') {
+        const isMe = inner.from === tabId;
+        addLine(isMe ? 'you' : inner.from, inner.text, isMe ? 'me' : '');
+        addFrame('in', 'text', inner.text, e.data.length);
+      } else {
+        // legacy plain string
+        addLine('anon', m.msg);
+        addFrame('in', 'text', m.msg, e.data.length);
+      }
+    } else {
+      addFrame('in', 'text', e.data, e.data.length);
+    }
+    updateCounts();
+  };
+}
+
+function sendWire(s) {
+  if (ws && ws.readyState === 1) {
+    ws.send(s);
+    tx++; bytes += s.length;
+    // we don't echo our own message locally until the broadcast bounces back,
+    // but we record the outbound frame
+    addFrame('out', 'text', s, s.length);
+    updateCounts();
+  }
+}
+
+$('f').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const v = $('m').value.trim();
+  if (!v) return;
+  sendWire(JSON.stringify({ kind: 'msg', from: tabId, text: v }));
+  $('m').value = '';
+});
+
+connect();
+</script>
 </body>
 </html>

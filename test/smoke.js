@@ -188,9 +188,9 @@ async function main() {
   );
 
   // 5. Static file with correct MIME
-  r = await rawRequest(port, [get('/style.css')]);
+  r = await rawRequest(port, [get('/loom.css')]);
   ok(
-    'GET /style.css -> 200 text/css',
+    'GET /loom.css -> 200 text/css',
     r.status === 200 && r.headers['content-type'].includes('text/css')
   );
 
@@ -202,7 +202,7 @@ async function main() {
   r = await rawRequest(port, [get('/_routes')]);
   ok(
     'GET /_routes -> 200 HTML docs',
-    r.status === 200 && r.body.toString().includes('Forge')
+    r.status === 200 && r.body.toString().includes('api reference')
   );
   r = await rawRequest(port, [get('/_routes?format=json')]);
   ok('GET /_routes?format=json -> route list', r.status === 200 && Array.isArray(JSON.parse(r.body).routes));
@@ -246,9 +246,9 @@ async function main() {
   );
 
   // 14. HEAD returns headers (incl. Content-Length) but NO body.
-  r = await rawRequest(port, [head('/style.css')]);
+  r = await rawRequest(port, [head('/loom.css')]);
   ok(
-    'HEAD /style.css -> 200, Content-Length set, empty body',
+    'HEAD /loom.css -> 200, Content-Length set, empty body',
     r.status === 200 &&
       r.headers['content-length'] &&
       Number(r.headers['content-length']) > 0 &&
@@ -352,7 +352,7 @@ async function main() {
   r = await rawRequest(port, [get('/_trace')]);
   ok(
     '/_trace HTML view renders',
-    r.status === 200 && r.body.toString().includes('Flight Recorder'),
+    r.status === 200 && r.body.toString().includes('flight recorder'),
     `got ${r.status}`
   );
 

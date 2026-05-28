@@ -1,49 +1,247 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Forge — Static Demo</title>
-  <link rel="stylesheet" href="/style.css">
+  <title>loom — http/1.1 from raw net</title>
+  <link rel="icon" href="./loom.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./loom.css">
+  <script>
+    (function () { try { document.documentElement.setAttribute('data-theme', localStorage.getItem('loom-theme') || 'dark'); } catch (e) {} })();
+  </script>
 </head>
 <body>
-  <main>
-    <img src="/logo.svg" alt="Forge logo" width="96" height="96">
-    <h1>⚒ Forge</h1>
-    <p>An HTTP/1.1 framework built from scratch on Node's
-       <code>net</code> module. This page is served as a static file by
-       Forge itself.</p>
-    <div class="links">
-      <a class="card" href="/game.html">
-        <strong>🎨 Draw &amp; Guess</strong>
-        <span>Multiplayer Pictionary — open in 2 tabs and play</span>
-      </a>
-      <a class="card" href="/chat.html">
-        <strong>💬 Live Chat</strong>
-        <span>Real-time chat over a hand-rolled WebSocket</span>
-      </a>
-      <a class="card" href="/_routes">
-        <strong>📖 API Reference</strong>
-        <span>Auto-generated from the registered routes</span>
-      </a>
-      <a class="card" href="/_trace">
-        <strong>📊 Flight Recorder</strong>
-        <span>Live timeline of recent requests</span>
-      </a>
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="lm-bar">
+  <div class="mark">
+    <svg viewBox="0 0 28 28" width="26" height="26" aria-hidden="true">
+      <line x1="5"  y1="2" x2="5"  y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <line x1="11" y1="2" x2="11" y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <line x1="17" y1="2" x2="17" y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <line x1="23" y1="2" x2="23" y2="26" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+      <g stroke="currentColor" stroke-width="1.4" opacity="0.45" stroke-linecap="square">
+        <line x1="1" y1="8" x2="4" y2="8"/><line x1="6" y1="8" x2="10" y2="8"/><line x1="12" y1="8" x2="16" y2="8"/><line x1="18" y1="8" x2="22" y2="8"/><line x1="24" y1="8" x2="27" y2="8"/>
+        <line x1="1" y1="20" x2="4" y2="20"/><line x1="6" y1="20" x2="10" y2="20"/><line x1="12" y1="20" x2="16" y2="20"/><line x1="18" y1="20" x2="22" y2="20"/><line x1="24" y1="20" x2="27" y2="20"/>
+      </g>
+      <line class="lm-mark-accent" x1="0" y1="14" x2="28" y2="14" stroke-width="2.4" stroke-linecap="square"/>
+    </svg>
+    <span class="nm">loom</span>
+    <span class="sub">// weaves <b>http/1.1</b> from raw net</span>
+  </div>
+  <nav class="crumbs">
+    <a href="/"           class="on"><span class="kbd">[g]</span>index</a>
+    <a href="/chat.html"><span class="kbd">[c]</span>chat</a>
+    <a href="/game.html"><span class="kbd">[p]</span>game</a>
+    <a href="/_routes"><span class="kbd">[r]</span>routes</a>
+    <a href="/_trace"><span class="kbd">[t]</span>trace</a>
+  </nav>
+  <div class="meta">
+    <span>:3000</span>
+    <span>tests <b>34/34</b></span>
+    <button class="lm-theme-btn" type="button" title="Toggle theme (⇧T)">☀ light</button>
+  </div>
+</header>
+
+<main class="lm-stage">
+
+  <!-- ============================== HERO ============================== -->
+  <section class="lm-hero">
+    <div class="left">
+      <div class="preheader">
+        <span class="pre-dot"></span>
+        <span>reichman ps#1 · full stack engineering · v0.1</span>
+        <span style="margin-left:auto;color:var(--green)">● ready</span>
+      </div>
+      <h1>loom<span class="slash">/</span>http<span class="cursor"></span></h1>
+      <p class="lede">
+        A tiny <b>http/1.1</b> framework woven from <b>nothing but</b> node's
+        <code>net</code>, <code>fs</code>, <code>path</code>, and one hash from
+        <code>crypto</code>. Express-shaped api, typed routes with auto-validation,
+        live docs that can't drift, a flight recorder, hand-rolled websockets,
+        and a multiplayer draw-and-guess game — all on the same raw sockets.
+      </p>
+      <div class="actions">
+        <a class="btn" href="/_routes"><span>api reference</span><span class="arr">↵</span></a>
+        <a class="btn outline" href="/game.html"><span>play draw &amp; guess</span><span class="arr">↗</span></a>
+        <a class="btn outline" href="/chat.html"><span>open chat</span><span class="arr">↗</span></a>
+      </div>
     </div>
-  </main>
-  <style>
-    main { max-width: 640px; }
-    .links { display:grid; grid-template-columns:1fr 1fr; gap:1rem;
-      margin-top:1.5rem; }
-    @media (max-width:560px){ .links{ grid-template-columns:1fr; } }
-    .card { display:flex; flex-direction:column; gap:.3rem; text-align:left;
-      background:#161b22; border:1px solid #21262d; border-radius:12px;
-      padding:1rem 1.2rem; text-decoration:none; color:#e6edf3;
-      transition:border-color .15s, transform .15s; }
-    .card:hover { border-color:#4c9aff; transform:translateY(-2px); }
-    .card strong { font-size:1.05rem; }
-    .card span { color:#9aa6b2; font-size:.88rem; }
-  </style>
+    <div class="right">
+      <div class="lm-term">
+        <div class="lm-term-head">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <span class="lbl">~/loom · zsh</span>
+          <span class="live"><i></i> live</span>
+        </div>
+        <div class="lm-term-body" id="termBody"></div>
+      </div>
+      <div class="micro">
+        <span>&lt;--&gt; ws status</span>
+        <span><span class="ok">connected</span> · /chat · /game</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== STATS ============================== -->
+  <section class="lm-stats">
+    <div class="lm-stat"><div class="k"><span class="dot"></span>dependencies</div><div class="v green">0</div></div>
+    <div class="lm-stat"><div class="k"><span class="dot"></span>http libs used</div><div class="v green">0</div></div>
+    <div class="lm-stat">
+      <div class="k"><span class="dot"></span>assertions</div>
+      <div class="v">34<small>/ 34</small></div>
+      <div class="spark" id="sparkA"></div>
+    </div>
+    <div class="lm-stat">
+      <div class="k"><span class="dot"></span>p50 latency</div>
+      <div class="v">4<small>ms · p99 14ms</small></div>
+      <div class="spark" id="sparkB"></div>
+    </div>
+  </section>
+
+  <!-- ============================== ARCHITECTURE ============================== -->
+  <div class="lm-rule"><span class="ic">▸</span><span>how it weaves · architecture</span><span class="ic">◂</span></div>
+  <section class="lm-arch">
+    <div class="step"><span class="n">step 01</span><span class="t">net</span><span class="d">raw tcp sockets · no http module</span></div>
+    <div class="arrow">▸</div>
+    <div class="step"><span class="n">step 02</span><span class="t">parser</span><span class="d">buffer-safe · content-length aware</span></div>
+    <div class="arrow">▸</div>
+    <div class="step"><span class="n">step 03</span><span class="t">router</span><span class="d">:param + wildcards · middleware chain</span></div>
+    <div class="arrow">▸</div>
+    <div class="step"><span class="n">step 04</span><span class="t">handler</span><span class="d">typed routes auto-validate the body</span></div>
+    <div class="arrow">▸</div>
+    <div class="step"><span class="n">step 05</span><span class="t">response</span><span class="d">chainable · streamed sendFile · mime</span><span class="badge">ws upgrade</span></div>
+  </section>
+
+  <!-- ============================== CARDS ============================== -->
+  <div class="lm-rule"><span class="ic">▸</span><span>what's inside · 4 surfaces</span><span class="ic">◂</span></div>
+  <section class="lm-cards">
+    <a class="lm-card" href="/game.html">
+      <div class="top"><span class="path">/game.html</span><span class="kbd">[p]</span></div>
+      <h3>draw &amp; guess</h3>
+      <p>Multiplayer Pictionary over a hand-rolled WebSocket. Server-authoritative canvas, op-log replay, spectators that watch the current round then play the next.</p>
+      <div class="tags"><span>websocket</span><span>canvas</span><span>op-log</span><span>multiplayer</span></div>
+    </a>
+    <a class="lm-card" href="/chat.html">
+      <div class="top"><span class="path">/chat.html</span><span class="kbd">[c]</span></div>
+      <h3>live chat</h3>
+      <p>Broadcast chat between browser tabs. RFC 6455 handshake checked against the spec's own test vector. Frames masked client→server per §5.3.</p>
+      <div class="tags"><span>websocket</span><span>rfc 6455</span><span>broadcast</span></div>
+    </a>
+    <a class="lm-card" href="/_routes">
+      <div class="top"><span class="path">/_routes</span><span class="kbd">[r]</span></div>
+      <h3>api reference</h3>
+      <p>Auto-generated from typed-route metadata. Schemas live with the handler, so docs can't drift from code. Available as HTML or ?format=json.</p>
+      <div class="tags"><span>typed routes</span><span>auto-validation</span><span>live docs</span></div>
+    </a>
+    <a class="lm-card" href="/_trace">
+      <div class="top"><span class="path">/_trace</span><span class="kbd">[t]</span></div>
+      <h3>flight recorder</h3>
+      <p>Bounded ring buffer of recent requests with per-middleware timing, validation pass/fail, and final size. Auto-refreshes every 3s.</p>
+      <div class="tags"><span>observability</span><span>ring buffer</span><span>3s refresh</span></div>
+    </a>
+  </section>
+
+</main>
+
+<!-- ============================== FOOTER ============================== -->
+<footer class="lm-foot">
+  <span class="badge">loom 0.1</span>
+  <span><span class="muted">cwd</span> <span style="color:var(--ink)">/</span></span>
+  <span><span class="muted">mem</span> <span class="clock">18.4</span><span class="muted">MB</span></span>
+  <span><span class="muted">uptime</span> <span data-uptime-start="0">00:00:00</span></span>
+  <span><span class="muted">clock</span> <span class="clock">--:--:--</span></span>
+  <span class="spacer"></span>
+  <span class="kbd-hints">nav <b>g</b> <b>c</b> <b>p</b> <b>r</b> <b>t</b> · theme <b>⇧t</b></span>
+</footer>
+
+<script src="./loom-shared.js"></script>
+<script>
+// ─── set uptime anchor (loosely "page open" since real server uptime not exposed) ───
+document.querySelector('[data-uptime-start]').dataset.uptimeStart = Date.now();
+
+// ─── animated sparklines ───
+function spark(el, data, scale) {
+  let off = 0;
+  function draw() {
+    const r = data.slice(off).concat(data.slice(0, off));
+    el.innerHTML = '';
+    for (let i = 0; i < r.length; i++) {
+      const b = document.createElement('i');
+      b.style.height = (r[i] * scale) + '%';
+      el.appendChild(b);
+    }
+    off = (off + 1) % data.length;
+  }
+  draw();
+  setInterval(draw, 900);
+}
+spark(document.getElementById('sparkA'), [4,6,3,8,5,9,4,7,6,5,8,9,7,6,8,9,9,9], 8);
+spark(document.getElementById('sparkB'), [3,5,4,2,6,3,4,5,3,4,6,4,3,5,4,2,4,3], 10);
+
+// ─── typewriter terminal ───
+const scenes = [
+  { cmd: 'node examples/demo.js', out: [
+    '⊢ loom listening on <span class="num">:3000</span>',
+    '⊢ routes <span class="ok">07</span> · static <span class="ok">/public</span>',
+    '⊢ ws upgrade <span class="ok">ok</span> · /chat /game',
+  ]},
+  { cmd: 'node test/smoke.js', out: [
+    '⊢ <span class="ok">passed 34/34</span> in <span class="num">312</span> ms',
+  ]},
+  { cmd: 'curl :3000/api/users/42', out: [
+    '⊢ <span class="ok">200 ok</span> · <span class="num">6</span>ms · <span class="num">142</span>B',
+    '{ "id": "42", "name": "User 42" }',
+  ]},
+  { cmd: "curl :3000/api/users -d '{}'", out: [
+    '⊢ <span class="err">400 validation failed</span> · <span class="num">3</span>ms',
+    '{ "error": "Validation failed", "details": [...] }',
+  ]},
+];
+
+const termBody = document.getElementById('termBody');
+const MAX = 6;
+let history = [];
+let sceneIdx = 0, phase = 'typing', charCount = 0;
+
+function render() {
+  const cur = scenes[sceneIdx];
+  let html = '';
+  for (const h of history) {
+    html += '<span class="lm-term-line ' + h.kind + '">' + h.text + '</span>';
+  }
+  const typed = cur.cmd.slice(0, charCount);
+  const cursor = '<span class="lm-cursor"></span>';
+  html += '<span class="lm-term-line lm-term-typing">' + typed + (phase === 'typing' ? cursor : '') + '</span>';
+  if (phase === 'showing') {
+    for (const o of cur.out) {
+      html += '<span class="lm-term-line out">' + o + '</span>';
+    }
+  }
+  termBody.innerHTML = html;
+}
+
+function step() {
+  const cur = scenes[sceneIdx];
+  let next = 38;
+  if (phase === 'typing') {
+    if (charCount < cur.cmd.length) charCount++;
+    else { phase = 'showing'; next = 240; }
+  } else if (phase === 'showing') {
+    history.push({ kind: 'ps', text: cur.cmd });
+    for (const o of cur.out) history.push({ kind: 'out', text: o });
+    if (history.length > MAX) history = history.slice(-MAX);
+    charCount = 0; phase = 'typing'; sceneIdx = (sceneIdx + 1) % scenes.length;
+    next = 1600;
+  }
+  render();
+  setTimeout(step, next);
+}
+render();
+setTimeout(step, 800);
+</script>
 </body>
 </html>
