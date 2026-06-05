@@ -1,8 +1,5 @@
 'use strict';
 
-// Renders the live API documentation served at /_routes — loom-styled.
-// Schemas live with the handlers, so this view cannot drift from code.
-
 function collectRoutes(router, wsPaths = []) {
   const http = router.routes
     .filter((r) => !r.meta.hidden)
@@ -99,7 +96,6 @@ function hiResp(src) {
   return out;
 }
 
-// ─── per-route example builders (mirrors the demo) ─────────────────────
 function exampleBody(bodySchema) {
   const example = {};
   for (const [k, v] of Object.entries(bodySchema)) {
@@ -117,14 +113,13 @@ function curlFor(r) {
   const url = ':3000' + r.path.replace(/:(\w+)/g, (_, k) =>
     ({ id: '42' }[k] || ('{' + k + '}')));
   if (r.method === 'WS') {
-    // Not an HTTP call — show how to open the socket from the browser.
+
     return "const ws = new WebSocket('ws://localhost:3000" + r.path + "');\n" +
            "ws.onmessage = (e) => console.log(e.data);";
   }
   if (r.method === 'GET') return 'curl ' + url;
   if (r.method === 'DELETE') return 'curl -X DELETE ' + url;
 
-  // POST / PUT / PATCH — send a JSON body.
   const body = r.bodySchema
     ? exampleBody(r.bodySchema)
     : (r.method === 'PATCH' ? { name: 'new name' } : {});
@@ -158,7 +153,6 @@ function failFor(r) {
          '  "details": [{ "field": "email", "message": "pattern" }] }';
 }
 
-// ─── schema row builder ────────────────────────────────────────────────
 function schemaRows(schema) {
   if (!schema) return '';
   return Object.entries(schema).map(([field, rule]) => {
@@ -285,7 +279,7 @@ function renderHtml(router, wsPaths = []) {
       <line class="lm-mark-accent" x1="0" y1="14" x2="28" y2="14" stroke-width="2.4" stroke-linecap="square"/>
     </svg>
     <span class="nm">loom</span>
-    <span class="sub">// weaves <b>http/1.1</b> from raw net</span>
+    <span class="sub">weaves <b>http/1.1</b> from raw net</span>
   </div>
   <nav class="crumbs">
     <a href="/"><span class="kbd">[g]</span>index</a>
@@ -368,7 +362,6 @@ tabs.forEach((t) => {
 });
 search.addEventListener('input', applyFilters);
 
-// "copy" buttons — copy the curl command to the clipboard.
 document.querySelectorAll('.copy-btn').forEach((b) => {
   b.addEventListener('click', async () => {
     try {

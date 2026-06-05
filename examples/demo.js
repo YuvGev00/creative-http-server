@@ -5,52 +5,40 @@ const forge = require('../src/server');
 
 const app = forge();
 
-// --- Middleware: simple request logger ---
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()}  ${req.method} ${req.path}`);
   next();
 });
 
-// --- Required feature 1: route handlers (GET / POST / params) ---
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello, World!', from: 'Forge' });
 });
 
-// Plain POST handler: echoes the parsed JSON body back with a 201.
 app.post('/api/echo', (req, res) => {
   res.status(201).json(req.body);
 });
 
-// ─────────────────────────────────────────────────────────────────────────
-// /api/users — a complete CRUD resource over an in-memory store. Exercises
-// every HTTP verb the framework supports (GET list, GET one, POST, PUT,
-// PATCH, DELETE) and shows typed-route validation on the write methods.
-// ─────────────────────────────────────────────────────────────────────────
 const users = [{ id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' }];
 let nextUserId = 2;
 
 const findUser = (id) => users.find((u) => String(u.id) === String(id));
 
-// Shared body schema for create / replace.
 const userBody = {
   name: { type: 'string', required: true, min: 2, max: 40 },
   email: { type: 'string', required: true, pattern: /^[^@\s]+@[^@\s]+\.[^@\s]+$/ },
   role: { type: 'string', enum: ['admin', 'member'] },
 };
 
-// READ — list all.
 app.get('/api/users', (req, res) => {
   res.json(users);
 });
 
-// READ — one by id (reads the real store; 404 if missing).
 app.get('/api/users/:id', (req, res) => {
   const user = findUser(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found', id: req.params.id });
   res.json(user);
 });
 
-// CREATE — typed + validated; 201 with the new resource.
 app.route({
   method: 'POST',
   path: '/api/users',
@@ -68,7 +56,6 @@ app.route({
   },
 });
 
-// REPLACE — full update of an existing user (validated like create).
 app.route({
   method: 'PUT',
   path: '/api/users/:id',
@@ -84,7 +71,6 @@ app.route({
   },
 });
 
-// UPDATE — partial patch; only the provided fields change.
 app.patch('/api/users/:id', (req, res) => {
   const user = findUser(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found', id: req.params.id });
@@ -95,7 +81,6 @@ app.patch('/api/users/:id', (req, res) => {
   res.json({ patched: true, user });
 });
 
-// DELETE — remove a user; 404 if it never existed.
 app.delete('/api/users/:id', (req, res) => {
   const i = users.findIndex((u) => String(u.id) === String(req.params.id));
   if (i === -1) return res.status(404).json({ error: 'User not found', id: req.params.id });
@@ -103,7 +88,6 @@ app.delete('/api/users/:id', (req, res) => {
   res.json({ deleted: true, user: removed });
 });
 
-// --- Creative feature: hand-rolled WebSocket chat (broadcast) ---
 const chatClients = new Set();
 app.ws('/chat', (conn) => {
   chatClients.add(conn);
@@ -114,13 +98,11 @@ app.ws('/chat', (conn) => {
   conn.on('close', () => chatClients.delete(conn));
 });
 
-// --- Creative feature: multiplayer Draw & Guess game ---
 const { DrawGame } = require('../src/draw-game');
 const game = new DrawGame();
-const gameConns = new Map(); // playerId -> conn
+const gameConns = new Map();
 let nextId = 1;
 
-// Broadcast helper: events with a `_to` go to one player; others to all.
 game.onBroadcast((event) => {
   const { _to, ...payload } = event;
   const msg = JSON.stringify(payload);
@@ -145,12 +127,11 @@ app.ws('/game', (conn) => {
     if (m.type === 'join') {
       if (joined) return;
       joined = true;
-      game.addPlayer(id, m.name); // emits a snapshot to this player
+      game.addPlayer(id, m.name);
     } else if (!joined) {
       return;
     } else if (m.type === 'op') {
-      // All canvas actions (stroke/fill/undo/clear) go through the
-      // server, which validates the drawer and keeps the op log.
+
       game.canvasOp(id, m.op);
     } else if (m.type === 'guess') {
       game.guess(id, m.text);
@@ -163,7 +144,6 @@ app.ws('/game', (conn) => {
   });
 });
 
-// --- Required feature 2: static file serving ---
 app.static(path.join(__dirname, 'public'));
 
 const PORT = process.env.PORT || 3000;

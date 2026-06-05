@@ -12,31 +12,25 @@ const Recorder = require('./recorder');
 const traceView = require('./trace-view');
 const ws = require('./websocket');
 
-const MAX_REQUEST_BYTES = 5 * 1024 * 1024; // guard against unbounded buffering
-const SOCKET_TIMEOUT_MS = 30 * 1000; // reap idle / wedged connections
+const MAX_REQUEST_BYTES = 5 * 1024 * 1024;
+const SOCKET_TIMEOUT_MS = 30 * 1000;
 
-// Static-asset extensions the Flight Recorder skips, so the timeline shows
-// meaningful traffic (API calls, page navigations) rather than the .css/.js/
-// .svg fetches every page load fans out into.
 const STATIC_ASSET_RE = /\.(css|js|mjs|svg|png|jpe?g|gif|ico|webp|woff2?|ttf|map)$/i;
 function isStaticAsset(path) {
   return STATIC_ASSET_RE.test(path);
 }
 
-// The application object. Chainable, Express-flavoured API plus the creative
-// typed-route layer (app.route) and auto docs at /_routes.
 class App {
   constructor() {
     this.router = new Router();
     this.recorder = new Recorder(50);
-    this.wsRoutes = new Map(); // exact path -> handler
+    this.wsRoutes = new Map();
     this._docsPath = '/_routes';
     this._registerDocsRoute();
     this._registerTraceRoute();
   }
 
-  // CREATIVE: register a WebSocket endpoint. handler(conn, req) gets a
-  // connection with .send()/.close() and .on('message'|'close').
+
   ws(path, handler) {
     this.wsRoutes.set(path, handler);
     return this;
@@ -71,9 +65,8 @@ class App {
     return this;
   }
 
-  // CREATIVE: declarative typed route. Validates req.body against `body`
-  // schema and short-circuits with a structured 400 before the handler runs.
-  // The schema + description are stored as metadata for the live docs page.
+
+
   route({ method = 'GET', path, body: bodySchema, description, handler }) {
     const wrapped = async (req, res) => {
       if (bodySchema) {
@@ -136,14 +129,11 @@ class App {
       let buffer = Buffer.alloc(0);
       let closed = false;
 
-      // Idle/slow-client guard. Covers slow-loris (trickled headers), a
-      // client that declares a body it never sends, and a handler/middleware
-      // that never responds — any wedged connection is reaped instead of
-      // leaking a socket forever.
-      // The timeout only guards the REQUEST-READ phase (slow-loris /
-      // trickled or never-finished requests). Once a full request is
-      // parsed it is disarmed, so a legitimately slow handler is never
-      // killed mid-response.
+
+
+
+
+
       let dispatching = false;
       socket.setTimeout(SOCKET_TIMEOUT_MS);
       socket.on('timeout', () => {
@@ -172,8 +162,7 @@ class App {
           return;
         }
 
-        // Drain every complete request currently buffered. TCP may deliver
-        // a partial request, a whole one, or several at once.
+
         while (!closed) {
           const result = extractRequest(buffer, MAX_REQUEST_BYTES);
 
@@ -187,21 +176,19 @@ class App {
             closed = true;
             return;
           }
-          if (!result.complete) break; // wait for more bytes
+          if (!result.complete) break;
 
           buffer = buffer.slice(result.bytesConsumed);
 
-          // Full request received — disarm the read-phase timeout so a
-          // slow handler isn't reaped as if it were a slow client.
+
           dispatching = true;
           socket.setTimeout(0);
 
           const req = new Request(result.request, socket);
 
-          // WebSocket upgrade: hijack the socket out of the HTTP path.
           if (ws.isUpgrade(req) && this.wsRoutes.has(req.path)) {
             socket.setTimeout(0);
-            closed = true; // stop the HTTP read loop for this socket
+            closed = true;
             socket.removeAllListeners('data');
             ws.handleUpgrade(
               req,
@@ -221,11 +208,9 @@ class App {
 
           const res = new Response(socket, req.method);
 
-          // Flight Recorder: don't record the trace endpoint itself (it
-          // would fill its own log), nor static-asset fetches (.css/.js/
-          // .svg/etc). Every page pulls several assets and /_trace auto-
-          // refreshes every 3s, so recording them floods the 50-entry ring
-          // buffer with noise and evicts the interesting API/page requests.
+
+
+
           const traceEntry =
             req.path === '/_trace' || isStaticAsset(req.path)
               ? null
@@ -253,8 +238,7 @@ class App {
             if (traceEntry) this.recorder.finish(traceEntry, res);
           }
 
-          // We send `Connection: close`, so stop after one request per
-          // connection — any pipelined extra is dropped with the socket.
+
           break;
         }
       });

@@ -1,8 +1,5 @@
 'use strict';
 
-// Renders the Flight Recorder timeline at /_trace — loom-styled.
-// Auto-refreshes so you can watch requests flow through the framework.
-
 function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])
@@ -16,7 +13,6 @@ function statusClass(s) {
   return 's2xx';
 }
 
-// step name → bar color class
 function stepClass(name, validation) {
   if (/validate/i.test(name)) return validation === 'failed' ? 'warn' : 'warn';
   if (/^handler$|render|sendfile/i.test(name)) return 'fire';
@@ -35,9 +31,6 @@ function fmtBytes(b) {
   return (b / 1024 / 1024).toFixed(1) + ' MB';
 }
 
-// Round a millisecond value to a compact label: sub-1ms keeps 2 decimals,
-// otherwise 1 decimal (drops a trailing .0). Avoids long float tails like
-// "0.11700000003ms" overflowing the legend / axis.
 function fmtMs(ms) {
   const n = Number(ms) || 0;
   if (n < 1) return n.toFixed(2).replace(/\.?0+$/, '') || '0';
@@ -115,7 +108,7 @@ function renderHtml(entries) {
       <line class="lm-mark-accent" x1="0" y1="14" x2="28" y2="14" stroke-width="2.4" stroke-linecap="square"/>
     </svg>
     <span class="nm">loom</span>
-    <span class="sub">// weaves <b>http/1.1</b> from raw net</span>
+    <span class="sub">weaves <b>http/1.1</b> from raw net</span>
   </div>
   <nav class="crumbs">
     <a href="/"><span class="kbd">[g]</span>index</a>

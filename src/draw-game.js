@@ -1,18 +1,5 @@
 'use strict';
 
-// CREATIVE FEATURE — multiplayer Draw & Guess (Pictionary).
-//
-// Pure game state + rules, deliberately transport-agnostic so it can be
-// unit-tested without sockets. The WebSocket route just relays JSON in and
-// broadcasts events out.
-//
-// Scaling/robustness model:
-//  - The SERVER owns the canvas: every stroke/fill/clear/undo is recorded in
-//    an authoritative op log. A client that joins (or reconnects) mid-round
-//    is sent the full op log and replays it, so many tabs never desync.
-//  - Players with too few to play, or who join mid-round, are spectators
-//    until the next round — they still see everything live.
-
 const WORDS = [
   'cat', 'house', 'tree', 'car', 'sun', 'fish', 'star', 'boat',
   'apple', 'flower', 'guitar', 'rocket', 'pizza', 'snake', 'cloud',
@@ -21,7 +8,7 @@ const WORDS = [
 ];
 
 const ROUND_MS = 75 * 1000;
-const MAX_OPS = 5000; // bound the op log so memory can't grow unboundedly
+const MAX_OPS = 5000;
 
 function pickWord(exclude) {
   let w;
@@ -33,15 +20,15 @@ function pickWord(exclude) {
 
 class DrawGame {
   constructor() {
-    this.players = new Map(); // id -> { id, name, score, _spectating }
-    this.order = []; // player ids, drawing rotation
+    this.players = new Map();
+    this.order = [];
     this.drawerIdx = -1;
     this.word = null;
     this.round = 0;
     this.roundActive = false;
     this.roundEndsAt = 0;
     this.guessedThisRound = new Set();
-    this.ops = []; // authoritative canvas op log for the current round
+    this.ops = [];
     this._listeners = [];
   }
 
@@ -56,12 +43,10 @@ class DrawGame {
     return this.order[this.drawerIdx] || null;
   }
 
-  // ---- players ----
-
   addPlayer(id, name) {
     const clean = String(name || 'anon').slice(0, 16).trim() || 'anon';
     this.players.set(id, { id, name: clean, score: 0, _spectating: false });
-    // Joining mid-round => spectator until the next round starts.
+
     this.players.get(id)._spectating = this.roundActive;
     this.order.push(id);
     this._emit({ type: 'players', players: this.publicPlayers() });
@@ -69,8 +54,7 @@ class DrawGame {
     if (!this.roundActive && this.players.size >= 2) {
       this.startRound();
     } else {
-      // Joined an in-progress (or idle) game: hand them a full snapshot so
-      // their canvas matches everyone else's immediately.
+
       this._emit({ ...this.snapshotFor(id), _to: id });
       if (this.roundActive) {
         this._emit({
@@ -89,7 +73,7 @@ class DrawGame {
     const wasDrawer = this.drawerId === id;
     const idx = this.order.indexOf(id);
     this.order = this.order.filter((x) => x !== id);
-    // Keep the rotation pointer stable so we don't skip/replay a drawer.
+
     if (idx !== -1 && idx <= this.drawerIdx) this.drawerIdx--;
     this._emit({ type: 'players', players: this.publicPlayers() });
     this._emit({ type: 'system', text: `${p.name} left.` });
@@ -116,8 +100,6 @@ class DrawGame {
     }));
   }
 
-  // ---- state / snapshot ----
-
   _baseState() {
     return {
       round: this.round,
@@ -142,21 +124,17 @@ class DrawGame {
     };
   }
 
-  // Everything a fresh/reconnecting client needs in one message: current
-  // state PLUS the full canvas op log to replay.
+
   snapshotFor(id) {
     return { ...this.stateFor(id), type: 'snapshot', ops: this.ops };
   }
-
-  // ---- canvas ops (server-authoritative) ----
 
   _recordOp(op) {
     this.ops.push(op);
     if (this.ops.length > MAX_OPS) this.ops.splice(0, this.ops.length - MAX_OPS);
   }
 
-  // Called when the drawer sends a canvas action. Validated + recorded +
-  // broadcast to everyone else. Returns false if not allowed.
+
   canvasOp(id, op) {
     if (id !== this.drawerId || !this.roundActive) return false;
     if (!op || typeof op !== 'object') return false;
@@ -181,10 +159,10 @@ class DrawGame {
       this._recordOp(clean);
       this._emit({ type: 'op', op: clean });
     } else if (t === 'undo') {
-      // Drop the last contiguous stroke-group / op the drawer made.
+
       if (this.ops.length) {
         this.ops.pop();
-        // Rebroadcast the whole log so every client rebuilds exactly.
+
         this._emit({ type: 'replace', ops: this.ops });
       }
     } else if (t === 'clear') {
@@ -196,8 +174,6 @@ class DrawGame {
     return true;
   }
 
-  // ---- rounds ----
-
   startRound() {
     if (this.players.size < 2) return;
     this.round++;
@@ -207,7 +183,7 @@ class DrawGame {
     this.roundEndsAt = Date.now() + ROUND_MS;
     this.guessedThisRound = new Set();
     this.ops = [];
-    // Everyone present at round start can play this round (clear spectator).
+
     for (const p of this.players.values()) p._spectating = false;
     this._emit({ type: 'clear' });
     this._emit({
@@ -235,8 +211,6 @@ class DrawGame {
     this._emit({ type: 'reveal', word: revealed });
     this._emit({ type: 'players', players: this.publicPlayers() });
   }
-
-  // ---- guessing ----
 
   guess(id, text) {
     const player = this.players.get(id);
@@ -275,14 +249,12 @@ class DrawGame {
       return { ok: true, correct: true };
     }
 
-    // "So close" feedback: same length + shares >60% letters.
     if (canScore && near(guess, this.word)) {
       this._emit({ type: 'chat', name: player.name, text: guess });
       this._emit({ type: 'system', text: `${player.name} is very close…`, _to: id });
       return { ok: true, correct: false, close: true };
     }
 
-    // Plain chat (wrong guess, drawer chatting, or already-guessed player).
     this._emit({ type: 'chat', name: player.name, text: guess });
     return { ok: true, correct: false };
   }
@@ -295,7 +267,6 @@ class DrawGame {
   }
 }
 
-// Cheap similarity: same length and majority of positions match.
 function near(a, b) {
   a = a.toLowerCase();
   b = b.toLowerCase();

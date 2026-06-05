@@ -1,16 +1,5 @@
 'use strict';
 
-// Tiny declarative schema validator powering the typed-route feature.
-//
-// Schema shape:
-//   { field: { type: 'string'|'number'|'boolean'|'array'|'object',
-//              required?: boolean,
-//              min?: number, max?: number,   // length for string/array, value for number
-//              enum?: any[],
-//              pattern?: RegExp } }
-//
-// validate(schema, data) -> { valid: boolean, errors: [{ field, message }] }
-
 function checkType(value, type) {
   switch (type) {
     case 'string':

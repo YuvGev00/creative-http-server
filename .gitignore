@@ -6,3 +6,4 @@ node_modules/
 *.rvf
 *.rvf.lock
 .claude/
+creative-http-server-submission/

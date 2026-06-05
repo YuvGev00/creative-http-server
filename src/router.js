@@ -1,14 +1,9 @@
 'use strict';
 
-// Routing + middleware. Path patterns support :params (/users/:id) and a
-// trailing wildcard (/static/*). Every registered route also keeps metadata
-// so the live /_routes docs page can describe the whole API.
-
 function compilePath(pattern) {
   const paramNames = [];
-  // Escape every regex metacharacter EXCEPT ':' and '*', which are our own
-  // pattern syntax, then translate those two into capture groups. The earlier
-  // version forgot to escape '*', so it never became a wildcard at all.
+
+
   let regexStr = pattern
     .replace(/[.+^${}()|[\]\\?]/g, '\\$&')
     .replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => {
@@ -24,8 +19,8 @@ function compilePath(pattern) {
 
 class Router {
   constructor() {
-    this.routes = []; // { method, pattern, regex, paramNames, handler, meta }
-    this.middleware = []; // { prefix, fn }
+    this.routes = [];
+    this.middleware = [];
   }
 
   use(prefixOrFn, maybeFn) {
@@ -64,15 +59,12 @@ class Router {
     return null;
   }
 
-  // Run matching middleware in registration order, then the route handler.
-  // Middleware calls next() to continue; not calling it ends the chain.
-  //
-  // Middleware may defer next() inside an async callback (e.g. fs.stat in the
-  // static handler), so dispatch resolves only once the chain has truly
-  // finished — either a response was sent or every step ran. The server must
-  // not send its own fallback before this promise settles.
-  // `trace` is an optional Flight Recorder entry + recorder; when present,
-  // each middleware step and the handler are timed into it.
+
+
+
+
+
+
   dispatch(req, res, trace = null) {
     const chain = this.middleware.filter(
       (m) =>
@@ -140,9 +132,8 @@ class Router {
       runStep();
     });
 
-    // Settle as soon as a response is flushed (covers middleware that
-    // responds without calling next, e.g. static file serving) OR the
-    // middleware/route chain runs to completion.
+
+
     return Promise.race([chainDone, res.done]);
   }
 }

@@ -1,12 +1,5 @@
 'use strict';
 
-// CREATIVE FEATURE — Request Flight Recorder.
-//
-// A bounded in-memory ring buffer that captures the lifecycle of recent
-// requests: which middleware ran, whether typed-route validation passed,
-// handler timing, final status and response size. Exposed live at /_trace
-// (HTML) and /_trace?format=json. Bounded so it can never leak memory.
-
 class Recorder {
   constructor(limit = 50) {
     this.limit = limit;
@@ -14,7 +7,6 @@ class Recorder {
     this.seq = 0;
   }
 
-  // Begin a trace for one request; returns a handle the dispatcher fills in.
   start(req) {
     const entry = {
       id: ++this.seq,
@@ -22,9 +14,9 @@ class Recorder {
       method: req.method,
       path: req.path,
       ip: req.ip,
-      steps: [], // { name, ms } per middleware / phase
+      steps: [],
       route: null,
-      validation: null, // 'passed' | 'failed' | null
+      validation: null,
       status: null,
       bytes: null,
       totalMs: null,
@@ -44,7 +36,7 @@ class Recorder {
     entry.totalMs = round(Number(process.hrtime.bigint() - entry._t0) / 1e6);
     entry.status = res.statusCode;
     entry.bytes = res._bytesWritten || 0;
-    // A typed route that returned 400 means schema validation rejected it.
+
     if (entry.validation === 'passed' && res.statusCode === 400) {
       entry.validation = 'failed';
     }

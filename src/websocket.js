@@ -1,16 +1,9 @@
 'use strict';
 
-// CREATIVE FEATURE — hand-rolled WebSocket (RFC 6455) over the same raw
-// `net` sockets. No `ws` library, no `http` server — just the Upgrade
-// handshake and frame codec implemented from the spec. `crypto` is used
-// only for the SHA-1 accept key (the assignment forbids http/http2, not
-// crypto).
-
 const crypto = require('crypto');
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
-// Compute the Sec-WebSocket-Accept value from the client's key.
 function acceptKey(clientKey) {
   return crypto
     .createHash('sha1')
@@ -18,7 +11,6 @@ function acceptKey(clientKey) {
     .digest('base64');
 }
 
-// Is this parsed request a WebSocket upgrade?
 function isUpgrade(req) {
   return (
     (req.headers['upgrade'] || '').toLowerCase() === 'websocket' &&
@@ -29,13 +21,6 @@ function isUpgrade(req) {
 
 const MAX_WS_FRAME = 10 * 1024 * 1024;
 
-// Decode as many complete frames as `buf` holds. Returns
-// { frames: [{opcode, payload}], rest: Buffer, error?: '...' }. A protocol
-// violation (oversized frame, or — when `requireMask` is set — an unmasked
-// client frame) sets `error` so the caller can close with code 1002 rather
-// than keep buffering. The server passes requireMask=true (RFC 6455 §5.1:
-// clients MUST mask); the same decoder with requireMask=false also reads
-// server→client frames (which are unmasked), e.g. in tests.
 function decodeFrames(buf, requireMask = false) {
   const frames = [];
   let offset = 0;
@@ -54,19 +39,17 @@ function decodeFrames(buf, requireMask = false) {
       p += 2;
     } else if (len === 127) {
       if (p + 8 > buf.length) break;
-      // Node Buffer can't safely read full 64-bit; assume < 2^53.
+
       len = Number(buf.readBigUInt64BE(p));
       p += 8;
     }
 
-    // Reject oversized frames: stop decoding and signal a protocol error so
-    // we don't sit buffering an attacker-declared multi-GB payload.
+
     if (len > MAX_WS_FRAME) {
       return { frames, rest: Buffer.alloc(0), error: 'frame too large' };
     }
 
-    // RFC 6455 §5.1: a client MUST mask all frames; a server MUST close on an
-    // unmasked one. Only enforced when decoding client→server frames.
+
     if (requireMask && !masked) {
       return { frames, rest: Buffer.alloc(0), error: 'unmasked client frame' };
     }
@@ -78,7 +61,7 @@ function decodeFrames(buf, requireMask = false) {
       p += 4;
     }
 
-    if (p + len > buf.length) break; // frame not fully arrived
+    if (p + len > buf.length) break;
 
     let payload = buf.slice(p, p + len);
     if (masked) {
@@ -94,7 +77,6 @@ function decodeFrames(buf, requireMask = false) {
   return { frames, rest: buf.slice(offset) };
 }
 
-// Encode a server frame (unmasked, single final fragment).
 function encodeFrame(payload, opcode = 0x1) {
   const data = Buffer.isBuffer(payload)
     ? payload
@@ -120,8 +102,6 @@ function encodeFrame(payload, opcode = 0x1) {
 
 const OPCODES = { CONT: 0x0, TEXT: 0x1, BIN: 0x2, CLOSE: 0x8, PING: 0x9, PONG: 0xa };
 
-// A live connection handed to user code: .send(), .close(), and events
-// 'message' / 'close'. Kept deliberately small.
 class WebSocketConnection {
   constructor(socket) {
     this.socket = socket;
@@ -154,8 +134,6 @@ class WebSocketConnection {
   }
 }
 
-// Perform the handshake and start the read loop. `leftover` is any bytes
-// already buffered after the request (rare, but TCP-correct to honor).
 function handleUpgrade(req, socket, handler, leftover = Buffer.alloc(0)) {
   const accept = acceptKey(req.headers['sec-websocket-key']);
   socket.write(
@@ -168,11 +146,10 @@ function handleUpgrade(req, socket, handler, leftover = Buffer.alloc(0)) {
   const conn = new WebSocketConnection(socket);
   let buffer = leftover;
 
-  // Send a Close frame (code 1002 = protocol error) and tear the socket down.
   const closeProtocol = () => {
     if (!conn.open) return;
     conn.open = false;
-    const code = Buffer.from([0x03, 0xea]); // 1002
+    const code = Buffer.from([0x03, 0xea]);
     try { socket.write(encodeFrame(code, OPCODES.CLOSE)); } catch (_) {}
     conn._emit('close');
     socket.end();

@@ -1,9 +1,5 @@
 'use strict';
 
-// Friendly wrapper around the raw parsed request. Gives handlers an
-// Express-ish surface: req.method, req.path, req.query, req.params,
-// req.headers, req.body (lazily JSON-parsed when appropriate).
-
 class Request {
   constructor(parsed, socket) {
     this.method = parsed.method;
@@ -16,7 +12,7 @@ class Request {
     this.socket = socket;
     this.ip = socket.remoteAddress;
 
-    this._rawBody = parsed.body; // Buffer
+    this._rawBody = parsed.body;
     this._parsedBody = undefined;
   }
 
@@ -32,8 +28,7 @@ class Request {
     return this._rawBody.toString('utf8');
   }
 
-  // Lazily parse the body. JSON when Content-Type says so (or it looks like
-  // JSON), otherwise the raw string. Cached after first access.
+
   get body() {
     if (this._parsedBody !== undefined) return this._parsedBody;
 

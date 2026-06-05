@@ -25,21 +25,19 @@ const STATUS_TEXT = {
   503: 'Service Unavailable',
 };
 
-// Per RFC 7230/7231 these never carry a message body.
 const BODYLESS_STATUS = new Set([204, 304]);
 
 class Response {
   constructor(socket, method = 'GET') {
     this.socket = socket;
-    // HEAD must return identical headers to GET but no body.
+
     this.method = String(method).toUpperCase();
     this.statusCode = 200;
     this.headers = {};
     this.sent = false;
-    this._bytesWritten = 0; // body bytes, for the Flight Recorder
-    // Resolves the moment a response is flushed. dispatch() awaits this so a
-    // middleware that responds without calling next() (e.g. static file
-    // serving) still settles the request cleanly.
+    this._bytesWritten = 0;
+
+
     this.done = new Promise((resolve) => {
       this._resolveDone = resolve;
     });
@@ -50,17 +48,15 @@ class Response {
     if (this._resolveDone) this._resolveDone();
   }
 
-  // True when the response must omit its body (HEAD request, or a status
-  // that is defined to never have one). Content-Length headers are still
-  // sent so HEAD mirrors the equivalent GET.
+
+
   _bodySuppressed() {
     return this.method === 'HEAD' || BODYLESS_STATUS.has(this.statusCode);
   }
 
   status(code) {
-    // Coerce and bound-check: a non-numeric status (e.g. user input) would
-    // otherwise be written verbatim into the status line and could inject
-    // headers / split the response.
+
+
     const n = Number(code);
     if (!Number.isInteger(n) || n < 100 || n > 599) {
       throw new Error(`Invalid HTTP status code: ${code}`);
@@ -69,8 +65,7 @@ class Response {
     return this;
   }
 
-  // Canonicalize a header name so set('content-length') and the auto
-  // 'Content-Length' don't both get emitted (duplicate-header bug).
+
   _canonical(name) {
     const lower = String(name).toLowerCase();
     for (const existing of Object.keys(this.headers)) {
@@ -80,9 +75,8 @@ class Response {
   }
 
   set(key, value) {
-    // Reject CR/LF in header name or value — otherwise a caller passing
-    // attacker-controlled data could inject extra headers or split the
-    // response (CRLF / response-splitting).
+
+
     if (/[\r\n]/.test(String(key)) || /[\r\n]/.test(String(value))) {
       throw new Error('Invalid characters (CR/LF) in header');
     }
@@ -95,7 +89,6 @@ class Response {
     return this;
   }
 
-  // Case-insensitive "is this header already set by the caller?"
   _has(name) {
     const lower = name.toLowerCase();
     return Object.keys(this.headers).some((k) => k.toLowerCase() === lower);
@@ -105,8 +98,7 @@ class Response {
     const text = STATUS_TEXT[this.statusCode] || 'Unknown';
     let head = `HTTP/1.1 ${this.statusCode} ${text}\r\n`;
 
-    // Only add managed defaults if the caller hasn't already set them
-    // (under any casing) — avoids emitting duplicate Content-Length etc.
+
     if (bodyLength !== null && !this._has('Content-Length')) {
       this.headers['Content-Length'] = bodyLength;
     }
@@ -121,7 +113,7 @@ class Response {
     }
 
     for (const [k, v] of Object.entries(this.headers)) {
-      // Final safety net: never emit a header containing CR/LF.
+
       if (/[\r\n]/.test(String(k)) || /[\r\n]/.test(String(v))) continue;
       head += `${k}: ${v}\r\n`;
     }
@@ -129,12 +121,10 @@ class Response {
     return head;
   }
 
-  // Send a Buffer or string body and close the connection.
   send(body) {
     if (this.sent) return this;
 
-    // Delegate objects to json() BEFORE marking sent — otherwise json()
-    // would see sent===true, bail, and the connection would hang forever.
+
     if (
       body !== null &&
       body !== undefined &&
@@ -161,8 +151,7 @@ class Response {
       }
     }
 
-    // HEAD mirrors GET's headers (incl. Content-Length) but sends no body.
-    // 204/304 carry neither a body nor a Content-Length.
+
     const bodyless = BODYLESS_STATUS.has(this.statusCode);
     const head = this._writeHead(bodyless ? null : bodyBuf.length);
     this.socket.write(head);
@@ -193,7 +182,7 @@ class Response {
   redirect(location, code = 302) {
     if (this.sent) return this;
     this.statusCode = code;
-    this.set('Location', location); // CR/LF-guarded
+    this.set('Location', location);
     return this.send('');
   }
 
@@ -213,15 +202,14 @@ class Response {
       const head = this._writeHead(stats.size);
       this.socket.write(head);
       this._bytesWritten = stats.size;
-      // HEAD: same headers (incl. Content-Length) as GET, but no body.
+
       if (this.method === 'HEAD') {
         this.socket.end();
         return;
       }
       const stream = fs.createReadStream(filePath);
       const cleanup = () => stream.destroy();
-      // If the client disconnects mid-transfer, tear the read stream down
-      // so the file descriptor isn't leaked.
+
       this.socket.once('close', cleanup);
       this.socket.once('error', cleanup);
       stream.on('error', () => this.socket.destroy());
